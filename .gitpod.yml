@@ -1,0 +1,60 @@
+# Contenido para: .gitpod.yml
+
+# Define las tareas que se ejecutarán al iniciar el workspace.
+tasks:
+  - name: Contrato (Sui)
+    # 'init' se ejecuta solo una vez al crear el workspace desde cero.
+    # Es perfecto para instalaciones pesadas que no cambian.
+    init: |
+      echo "--- Instalando Rust y Cargo (esto solo se ejecutará la primera vez)... ---"
+      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+      
+      echo "--- Instalando Sui CLI desde binarios... ---"
+      # 'source' es necesario para que el comando 'cargo' esté disponible inmediatamente.
+      source "$HOME/.cargo/env"
+      wget -O sui.tgz https://github.com/MystenLabs/sui/releases/download/testnet-v1.50.1/sui-testnet-v1.50.1-ubuntu-x86_64.tgz
+      tar -xzf sui.tgz
+      mv sui-testnet-v1.50.1-ubuntu-x86_64/sui ~/.cargo/bin/
+      rm sui.tgz
+      rm -rf sui-testnet-v1.50.1-ubuntu-x86_64
+      echo "--- Instalación de herramientas base completada. ---"
+    # 'command' se ejecuta CADA VEZ que abres o reinicias el workspace.
+    command: |
+      source "$HOME/.cargo/env"
+      echo "--- Verificando instalaciones... ---"
+      sui --version
+      echo "--- Entorno del Contrato listo. ---"
+      cd sui_contract
+      echo "✅ Estás en la carpeta del contrato. Usa 'sui move build' para compilar."
+
+  - name: Cliente (TypeScript)
+    # Esta terminal se abrirá al lado de la del contrato.
+    init: |
+      echo "--- Instalando dependencias del cliente... ---"
+      cd app_client_logic
+      npm install
+      cd ..
+    command: |
+      echo "--- Entorno del Cliente listo. ---"
+      cd app_client_logic
+      echo "✅ Estás en la carpeta del cliente. Usa 'npx ts-node create_wallet.ts' para ejecutar."
+
+  - name: General / Git
+    # Una tercera terminal para comandos generales.
+    command: |
+      echo "✅ Terminal principal lista para comandos de Git."
+
+# Configuración del editor VS Code dentro de Gitpod.
+vscode:
+  # Lista de extensiones recomendadas. Gitpod te sugerirá instalarlas.
+  extensions:
+    - rust-lang.rust-analyzer
+    - esbenp.prettier-vscode
+    - ms-vscode.vscode-typescript-next
+
+# Configuración de puertos.
+ports:
+  # Expone el puerto 5173, común para frameworks de frontend como Vite.
+  - port: 5173
+    # Cuando el puerto se active, abre una vista previa en Gitpod.
+    onOpen: open-preview

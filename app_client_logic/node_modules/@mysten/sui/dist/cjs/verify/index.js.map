@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../src/verify/index.ts"],
+  "sourcesContent": ["// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\n// eslint-disable-next-line import/no-cycle\nexport {\n\tverifySignature,\n\tverifyPersonalMessageSignature,\n\tverifyTransactionSignature,\n\tpublicKeyFromRawBytes,\n\tpublicKeyFromSuiBytes,\n} from './verify.js';\n"],
+  "mappings": ";;;;;;;;;;;;;;;;;;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAIA,oBAMO;",
+  "names": []
+}

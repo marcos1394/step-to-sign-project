@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../src/zklogin/index.ts"],
+  "sourcesContent": ["// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\nexport { getZkLoginSignature, parseZkLoginSignature } from './signature.js';\nexport {\n\ttoBigEndianBytes,\n\ttoPaddedBigEndianBytes,\n\thashASCIIStrToField,\n\tgenAddressSeed,\n\tgetExtendedEphemeralPublicKey,\n} from './utils.js';\nexport { computeZkLoginAddressFromSeed, computeZkLoginAddress, jwtToAddress } from './address.js';\nexport type { ComputeZkLoginAddressOptions } from './address.js';\nexport {\n\ttoZkLoginPublicIdentifier,\n\tZkLoginPublicIdentifier,\n\ttype ZkLoginCompatibleClient,\n} from './publickey.js';\nexport type { ZkLoginSignatureInputs } from './bcs.js';\nexport { poseidonHash } from './poseidon.js';\nexport { generateNonce, generateRandomness } from './nonce.js';\nexport { decodeJwt } from './jwt-utils.js';\n"],
+  "mappings": ";;;;;;;;;;;;;;;;;;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAGA,uBAA2D;AAC3D,mBAMO;AACP,qBAAmF;AAEnF,uBAIO;AAEP,sBAA6B;AAC7B,mBAAkD;AAClD,uBAA0B;",
+  "names": []
+}

@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../../src/keypairs/passkey/types.ts"],
+  "sourcesContent": ["// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\n/**\n * The value returned from navigator.credentials.get()\n */\nexport interface AuthenticationCredential extends PublicKeyCredential {\n\tresponse: AuthenticatorAssertionResponse;\n}\n\n/**\n * The value returned from navigator.credentials.create()\n */\nexport interface RegistrationCredential extends PublicKeyCredential {\n\tresponse: AuthenticatorAttestationResponse;\n}\n"],
+  "mappings": ";;;;;;;;;;;;;;AAAA;AAAA;",
+  "names": []
+}

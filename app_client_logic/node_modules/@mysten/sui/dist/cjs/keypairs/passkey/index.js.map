@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../../src/keypairs/passkey/index.ts"],
+  "sourcesContent": ["// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\nexport { PasskeyKeypair, BrowserPasskeyProvider, findCommonPublicKey } from './keypair.js';\nexport type { PasskeyProvider, BrowserPasswordProviderOptions } from './keypair.js';\nexport { PasskeyPublicKey } from './publickey.js';\n"],
+  "mappings": ";;;;;;;;;;;;;;;;;;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAEA,qBAA4E;AAE5E,uBAAiC;",
+  "names": []
+}

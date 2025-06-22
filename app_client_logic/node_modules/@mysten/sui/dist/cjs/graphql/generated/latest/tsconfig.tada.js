@@ -1,0 +1,12 @@
+module.exports = {
+  compilerOptions: {
+    plugins: [
+      {
+        name: "@0no-co/graphqlsp",
+        schema: "./schema.graphql",
+        tadaOutputLocation: "src/graphql/generated/latest/tada-env.ts"
+      }
+    ]
+  }
+};
+//# sourceMappingURL=tsconfig.tada.js.map

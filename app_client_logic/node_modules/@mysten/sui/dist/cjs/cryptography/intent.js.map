@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../src/cryptography/intent.ts"],
+  "sourcesContent": ["// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\nimport { bcs } from '../bcs/index.js';\n\nexport type IntentScope = Exclude<keyof typeof bcs.IntentScope.$inferType, '$kind'>;\n/**\n * Inserts a domain separator for a message that is being signed\n */\nexport function messageWithIntent(scope: IntentScope, message: Uint8Array) {\n\treturn bcs\n\t\t.IntentMessage(bcs.fixedArray(message.length, bcs.u8()))\n\t\t.serialize({\n\t\t\tintent: {\n\t\t\t\tscope: { [scope as 'PersonalMessage']: true },\n\t\t\t\tversion: { V0: true },\n\t\t\t\tappId: { Sui: true },\n\t\t\t},\n\t\t\tvalue: message,\n\t\t})\n\t\t.toBytes();\n}\n"],
+  "mappings": ";;;;;;;;;;;;;;;;;;AAAA;AAAA;AAAA;AAAA;AAAA;AAGA,iBAAoB;AAMb,SAAS,kBAAkB,OAAoB,SAAqB;AAC1E,SAAO,eACL,cAAc,eAAI,WAAW,QAAQ,QAAQ,eAAI,GAAG,CAAC,CAAC,EACtD,UAAU;AAAA,IACV,QAAQ;AAAA,MACP,OAAO,EAAE,CAAC,KAA0B,GAAG,KAAK;AAAA,MAC5C,SAAS,EAAE,IAAI,KAAK;AAAA,MACpB,OAAO,EAAE,KAAK,KAAK;AAAA,IACpB;AAAA,IACA,OAAO;AAAA,EACR,CAAC,EACA,QAAQ;AACX;",
+  "names": []
+}

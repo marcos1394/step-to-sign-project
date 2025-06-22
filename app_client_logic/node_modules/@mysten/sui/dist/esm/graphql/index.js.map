@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../src/graphql/index.ts"],
+  "sourcesContent": ["// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\nexport {\n\ttype GraphQLDocument,\n\ttype GraphQLQueryOptions,\n\ttype GraphQLQueryResult,\n\ttype GraphQLResponseErrors,\n\ttype SuiGraphQLClientOptions,\n\tSuiGraphQLClient,\n\tSuiGraphQLRequestError,\n} from './client.js';\n"],
+  "mappings": "AAGA;AAAA,EAMC;AAAA,EACA;AAAA,OACM;",
+  "names": []
+}

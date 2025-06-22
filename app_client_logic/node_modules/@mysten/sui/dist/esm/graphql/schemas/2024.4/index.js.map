@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../../../src/graphql/schemas/2024.4/index.ts"],
+  "sourcesContent": ["// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\nimport { initGraphQLTada } from 'gql.tada';\n\nimport type { introspection } from '../../generated/2024.4/tada-env.js';\nimport type { CustomScalars } from '../../types.js';\n\nexport * from '../../types.js';\n\nexport type { FragmentOf, ResultOf, VariablesOf, TadaDocumentNode } from 'gql.tada';\nexport { readFragment, maskFragments } from 'gql.tada';\n\nexport const graphql = initGraphQLTada<{\n\tintrospection: typeof introspection;\n\tscalars: CustomScalars;\n}>();\n"],
+  "mappings": "AAGA,SAAS,uBAAuB;AAKhC,cAAc;AAGd,SAAS,cAAc,qBAAqB;AAErC,MAAM,UAAU,gBAGpB;",
+  "names": []
+}

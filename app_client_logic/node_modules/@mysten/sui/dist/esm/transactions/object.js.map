@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../src/transactions/object.ts"],
+  "sourcesContent": ["// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\nimport type { Transaction, TransactionObjectInput } from './Transaction.js';\n\nexport function createObjectMethods<T>(makeObject: (value: TransactionObjectInput) => T) {\n\tfunction object(value: TransactionObjectInput) {\n\t\treturn makeObject(value);\n\t}\n\n\tobject.system = () => object('0x5');\n\tobject.clock = () => object('0x6');\n\tobject.random = () => object('0x8');\n\tobject.denyList = () => object('0x403');\n\tobject.option =\n\t\t({ type, value }: { type: string; value: TransactionObjectInput | null }) =>\n\t\t(tx: Transaction) =>\n\t\t\ttx.moveCall({\n\t\t\t\ttypeArguments: [type],\n\t\t\t\ttarget: `0x1::option::${value === null ? 'none' : 'some'}`,\n\t\t\t\targuments: value === null ? [] : [tx.object(value)],\n\t\t\t});\n\n\treturn object;\n}\n"],
+  "mappings": "AAKO,SAAS,oBAAuB,YAAkD;AACxF,WAAS,OAAO,OAA+B;AAC9C,WAAO,WAAW,KAAK;AAAA,EACxB;AAEA,SAAO,SAAS,MAAM,OAAO,KAAK;AAClC,SAAO,QAAQ,MAAM,OAAO,KAAK;AACjC,SAAO,SAAS,MAAM,OAAO,KAAK;AAClC,SAAO,WAAW,MAAM,OAAO,OAAO;AACtC,SAAO,SACN,CAAC,EAAE,MAAM,MAAM,MACf,CAAC,OACA,GAAG,SAAS;AAAA,IACX,eAAe,CAAC,IAAI;AAAA,IACpB,QAAQ,gBAAgB,UAAU,OAAO,SAAS,MAAM;AAAA,IACxD,WAAW,UAAU,OAAO,CAAC,IAAI,CAAC,GAAG,OAAO,KAAK,CAAC;AAAA,EACnD,CAAC;AAEH,SAAO;AACR;",
+  "names": []
+}

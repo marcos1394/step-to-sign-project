@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../src/utils/dynamic-fields.ts"],
+  "sourcesContent": ["// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\nimport { toHex } from '@mysten/bcs';\nimport { blake2b } from '@noble/hashes/blake2b';\n\nimport type { TypeTag } from '../bcs/bcs.js';\nimport { bcs } from '../bcs/index.js';\n\nexport function deriveDynamicFieldID(\n\tparentId: string,\n\ttypeTag: typeof TypeTag.$inferInput,\n\tkey: Uint8Array,\n) {\n\tconst address = bcs.Address.serialize(parentId).toBytes();\n\tconst tag = bcs.TypeTag.serialize(typeTag).toBytes();\n\tconst keyLength = bcs.u64().serialize(key.length).toBytes();\n\n\tconst hash = blake2b.create({\n\t\tdkLen: 32,\n\t});\n\n\thash.update(new Uint8Array([0xf0]));\n\thash.update(address);\n\thash.update(keyLength);\n\thash.update(key);\n\thash.update(tag);\n\n\treturn `0x${toHex(hash.digest().slice(0, 32))}`;\n}\n"],
+  "mappings": "AAGA,SAAS,aAAa;AACtB,SAAS,eAAe;AAGxB,SAAS,WAAW;AAEb,SAAS,qBACf,UACA,SACA,KACC;AACD,QAAM,UAAU,IAAI,QAAQ,UAAU,QAAQ,EAAE,QAAQ;AACxD,QAAM,MAAM,IAAI,QAAQ,UAAU,OAAO,EAAE,QAAQ;AACnD,QAAM,YAAY,IAAI,IAAI,EAAE,UAAU,IAAI,MAAM,EAAE,QAAQ;AAE1D,QAAM,OAAO,QAAQ,OAAO;AAAA,IAC3B,OAAO;AAAA,EACR,CAAC;AAED,OAAK,OAAO,IAAI,WAAW,CAAC,GAAI,CAAC,CAAC;AAClC,OAAK,OAAO,OAAO;AACnB,OAAK,OAAO,SAAS;AACrB,OAAK,OAAO,GAAG;AACf,OAAK,OAAO,GAAG;AAEf,SAAO,KAAK,MAAM,KAAK,OAAO,EAAE,MAAM,GAAG,EAAE,CAAC,CAAC;AAC9C;",
+  "names": []
+}

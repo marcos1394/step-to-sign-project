@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../src/client/index.ts"],
+  "sourcesContent": ["// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\nexport {\n\ttype SuiTransport,\n\ttype SuiTransportRequestOptions,\n\ttype SuiTransportSubscribeOptions,\n\ttype HttpHeaders,\n\ttype SuiHTTPTransportOptions,\n\tSuiHTTPTransport,\n} from './http-transport.js';\nexport { getFullnodeUrl } from './network.js';\nexport * from './types/index.js';\nexport {\n\ttype SuiClientOptions,\n\ttype PaginationArguments,\n\ttype OrderArguments,\n\tisSuiClient,\n\tSuiClient,\n} from './client.js';\nexport { SuiHTTPStatusError, SuiHTTPTransportError, JsonRpcError } from './errors.js';\n"],
+  "mappings": ";;;;;;;;;;;;;;;;;;;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAGA,4BAOO;AACP,qBAA+B;AAC/B,2BAAc,6BAZd;AAaA,oBAMO;AACP,oBAAwE;",
+  "names": []
+}

@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../../../src/graphql/generated/latest/tsconfig.tada.json"],
+  "sourcesContent": ["{\n    \"compilerOptions\": {\n        \"plugins\": [\n            {\n                \"name\": \"@0no-co/graphqlsp\",\n                \"schema\": \"./schema.graphql\",\n                \"tadaOutputLocation\": \"src/graphql/generated/latest/tada-env.ts\"\n            }\n        ]\n    }\n}\n"],
+  "mappings": "AAAA;AAAA,EACI,iBAAmB;AAAA,IACf,SAAW;AAAA,MACP;AAAA,QACI,MAAQ;AAAA,QACR,QAAU;AAAA,QACV,oBAAsB;AAAA,MAC1B;AAAA,IACJ;AAAA,EACJ;AACJ;",
+  "names": []
+}

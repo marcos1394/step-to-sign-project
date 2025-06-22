@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../src/chunk.ts"],
+  "sourcesContent": ["// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\nexport function chunk<T>(array: readonly T[], size: number): T[][] {\n\treturn Array.from({ length: Math.ceil(array.length / size) }, (_, i) => {\n\t\treturn array.slice(i * size, (i + 1) * size);\n\t});\n}\n"],
+  "mappings": "AAGO,SAAS,MAAS,OAAqB,MAAqB;AAClE,SAAO,MAAM,KAAK,EAAE,QAAQ,KAAK,KAAK,MAAM,SAAS,IAAI,EAAE,GAAG,CAAC,GAAG,MAAM;AACvE,WAAO,MAAM,MAAM,IAAI,OAAO,IAAI,KAAK,IAAI;AAAA,EAC5C,CAAC;AACF;",
+  "names": []
+}

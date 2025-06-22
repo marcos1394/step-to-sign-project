@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../src/multisig/index.ts"],
+  "sourcesContent": ["// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\nexport { MultiSigSigner } from './signer.js';\nexport { type MultiSigStruct, MultiSigPublicKey, parsePartialSignatures } from './publickey.js';\n"],
+  "mappings": "AAGA,SAAS,sBAAsB;AAC/B,SAA8B,mBAAmB,8BAA8B;",
+  "names": []
+}

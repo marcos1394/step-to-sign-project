@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../src/with-resolver.ts"],
+  "sourcesContent": ["// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\nexport interface PromiseWithResolvers<T> {\n\tpromise: Promise<T>;\n\tresolve: (value: T) => void;\n\treject: (error: unknown) => void;\n}\n\nexport function promiseWithResolvers<T>(): PromiseWithResolvers<T> {\n\tlet resolver!: (value: T) => void;\n\tlet rejecter!: (error: unknown) => void;\n\n\tconst promise = new Promise<T>((resolve, reject) => {\n\t\tresolver = resolve;\n\t\trejecter = reject;\n\t});\n\n\treturn {\n\t\tpromise,\n\t\tresolve: resolver,\n\t\treject: rejecter,\n\t};\n}\n"],
+  "mappings": ";;;;;;;;;;;;;;;;;;AAAA;AAAA;AAAA;AAAA;AAAA;AASO,SAAS,uBAAmD;AAClE,MAAI;AACJ,MAAI;AAEJ,QAAM,UAAU,IAAI,QAAW,CAAC,SAAS,WAAW;AACnD,eAAW;AACX,eAAW;AAAA,EACZ,CAAC;AAED,SAAO;AAAA,IACN;AAAA,IACA,SAAS;AAAA,IACT,QAAQ;AAAA,EACT;AACD;",
+  "names": []
+}

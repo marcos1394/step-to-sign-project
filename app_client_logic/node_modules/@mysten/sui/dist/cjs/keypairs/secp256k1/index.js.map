@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../../src/keypairs/secp256k1/index.ts"],
+  "sourcesContent": ["// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\nexport {\n\tDEFAULT_SECP256K1_DERIVATION_PATH,\n\tSecp256k1Keypair,\n\ttype Secp256k1KeypairData,\n} from './keypair.js';\nexport { Secp256k1PublicKey } from './publickey.js';\n"],
+  "mappings": ";;;;;;;;;;;;;;;;;;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAGA,qBAIO;AACP,uBAAmC;",
+  "names": []
+}

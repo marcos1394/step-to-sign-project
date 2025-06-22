@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../src/faucet/index.ts"],
+  "sourcesContent": ["// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\nexport {\n\trequestSuiFromFaucetV0,\n\trequestSuiFromFaucetV1,\n\trequestSuiFromFaucetV2,\n\tgetFaucetRequestStatus,\n\tgetFaucetHost,\n\tFaucetRateLimitError,\n} from './faucet.js';\n"],
+  "mappings": "AAGA;AAAA,EACC;AAAA,EACA;AAAA,EACA;AAAA,EACA;AAAA,EACA;AAAA,EACA;AAAA,OACM;",
+  "names": []
+}

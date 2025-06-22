@@ -1,0 +1,83 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query dryRunTransactionBlock($txBytes: String!) {
+	dryRunTransactionBlock(txBytes: $txBytes) {
+		error
+		transaction {
+			...TRANSACTION_FIELDS
+		}
+	}
+}
+
+mutation executeTransactionBlock($txBytes: String!, $signatures: [String!]!) {
+	executeTransactionBlock(txBytes: $txBytes, signatures: $signatures) {
+		errors
+		effects {
+			transactionBlock {
+				...TRANSACTION_FIELDS
+			}
+		}
+	}
+}
+
+query getTransactionBlock($digest: String!) {
+	transactionBlock(digest: $digest) {
+		...TRANSACTION_FIELDS
+	}
+}
+
+fragment TRANSACTION_FIELDS on TransactionBlock {
+	digest
+	bcs
+	signatures
+	effects {
+		bcs
+		epoch {
+			epochId
+		}
+		unchangedSharedObjects {
+			nodes {
+				__typename
+				... on SharedObjectRead {
+					object {
+						asMoveObject {
+							address
+							contents {
+								type {
+									repr
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		objectChanges {
+			nodes {
+				address
+				inputState {
+					version
+					asMoveObject {
+						address
+						contents {
+							type {
+								repr
+							}
+						}
+					}
+				}
+				outputState {
+					asMoveObject {
+						address
+						contents {
+							type {
+								repr
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

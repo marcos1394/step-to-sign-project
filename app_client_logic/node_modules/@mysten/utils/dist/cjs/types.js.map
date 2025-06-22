@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../src/types.ts"],
+  "sourcesContent": ["// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\nexport type Simplify<T> = {\n\t[K in keyof T]: T[K];\n\t// eslint-disable-next-line @typescript-eslint/ban-types\n} & {};\n\nexport type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (\n\tk: infer I,\n) => void\n\t? I\n\t: never;\n"],
+  "mappings": ";;;;;;;;;;;;;;AAAA;AAAA;",
+  "names": []
+}

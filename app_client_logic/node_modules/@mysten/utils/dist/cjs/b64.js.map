@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../src/b64.ts"],
+  "sourcesContent": ["// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\nexport function fromBase64(base64String: string): Uint8Array {\n\treturn Uint8Array.from(atob(base64String), (char) => char.charCodeAt(0));\n}\n\nconst CHUNK_SIZE = 8192;\nexport function toBase64(bytes: Uint8Array): string {\n\t// Special-case the simple case for speed's sake.\n\tif (bytes.length < CHUNK_SIZE) {\n\t\treturn btoa(String.fromCharCode(...bytes));\n\t}\n\n\tlet output = '';\n\tfor (var i = 0; i < bytes.length; i += CHUNK_SIZE) {\n\t\tconst chunk = bytes.slice(i, i + CHUNK_SIZE);\n\t\toutput += String.fromCharCode(...chunk);\n\t}\n\n\treturn btoa(output);\n}\n"],
+  "mappings": ";;;;;;;;;;;;;;;;;;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAGO,SAAS,WAAW,cAAkC;AAC5D,SAAO,WAAW,KAAK,KAAK,YAAY,GAAG,CAAC,SAAS,KAAK,WAAW,CAAC,CAAC;AACxE;AAEA,MAAM,aAAa;AACZ,SAAS,SAAS,OAA2B;AAEnD,MAAI,MAAM,SAAS,YAAY;AAC9B,WAAO,KAAK,OAAO,aAAa,GAAG,KAAK,CAAC;AAAA,EAC1C;AAEA,MAAI,SAAS;AACb,WAAS,IAAI,GAAG,IAAI,MAAM,QAAQ,KAAK,YAAY;AAClD,UAAM,QAAQ,MAAM,MAAM,GAAG,IAAI,UAAU;AAC3C,cAAU,OAAO,aAAa,GAAG,KAAK;AAAA,EACvC;AAEA,SAAO,KAAK,MAAM;AACnB;",
+  "names": []
+}

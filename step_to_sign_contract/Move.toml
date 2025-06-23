@@ -1,0 +1,11 @@
+[package]
+name = "StepToSign"
+version = "0.0.1"
+# Le decimos al compilador que use la sintaxis moderna de Move 2024.
+edition = "2024.alpha"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet" }
+
+[addresses]
+step_to_sign = "0x0"

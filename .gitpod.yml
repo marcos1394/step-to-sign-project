@@ -1,43 +1,46 @@
-# Contenido final y perfeccionado para: .gitpod.yml
+# Contenido definitivo y robusto para: .gitpod.yml
 
 tasks:
-  - name: Entorno Sui
+  - name: Entorno Sui y Contrato
     init: |
-      echo "--- Automatización de Entorno Profesional Iniciada ---"
-
-      echo "-> Instalando Rust y Cargo..."
+      echo "--- [FASE 1/6] Iniciando Instalación de Rust y Cargo... ---"
       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
       
-      # Hacemos 'source' aquí para que los siguientes comandos puedan usar 'cargo'.
-      source "$HOME/.cargo/env"
+      # CORRECCIÓN CLAVE: Hacemos 'export' del PATH para que esté disponible
+      # para TODOS los comandos siguientes dentro de este script 'init'.
+      export PATH="$HOME/.cargo/bin:$PATH"
       
-      # ¡IMPORTANTE! Usamos la versión 1.51.0 para que coincida con la devnet.
-      echo "-> Instalando Sui CLI v1.51.0 desde binarios..."
-      wget -O sui.tgz https://github.com/MystenLabs/sui/releases/download/testnet-v1.51.0/sui-testnet-v1.51.0-ubuntu-x86_64.tgz
+      echo "\n--- [FASE 2/6] Verificando Cargo... ---"
+      cargo --version
+      
+      # Usamos la v1.51.0 para que coincida con la versión del servidor de devnet y evitar warnings.
+      echo "\n--- [FASE 3/6] Instalando Sui CLI v1.51.0 desde binarios... ---"
+      wget -O sui.tgz https://github.com/MystenLabs/sui/releases/download/mainnet-v1.51.0/sui-mainnet-v1.51.0-ubuntu-x86_64.tar.gz
       tar -xzf sui.tgz
-      mv sui-testnet-v1.51.0-ubuntu-x86_64/sui ~/.cargo/bin/
+      # Usamos el comando 'mv' robusto que ya conocemos.
+      mv sui-mainnet-v1.51.0-ubuntu-x86_64/sui ~/.cargo/bin/
       rm sui.tgz
-      rm -rf sui-testnet-v1.51.0-ubuntu-x86_64
-
-      echo "-> Configurando cliente de Sui para devnet..."
-      # Automatizamos la creación del entorno devnet.
-      sui client new-env --alias devnet --rpc https://fullnode.devnet.sui.io:443
+      rm -rf sui-mainnet-v1.51.0-ubuntu-x86_64
       
-      echo "-> Instalando dependencias del cliente TypeScript..."
+      echo "\n--- [FASE 4/6] Verificando Sui CLI... ---"
+      sui --version
+      
+      echo "\n--- [FASE 5/6] Configurando cliente de Sui para devnet... ---"
+      # Ahora el comando 'sui' se encontrará sin problemas.
+      sui client new-env --alias devnet --rpc https://fullnode.devnet.sui.io:443
+      sui client switch --env devnet
+
+      echo "\n--- [FASE 6/6] Instalando dependencias del cliente TypeScript... ---"
       cd app_client_logic
       npm install
-      cd ..
-
-      echo "--- Instalación de herramientas base completada. ---"
+      
+      echo "\n\n--- ✅ Instalación de herramientas base completada. ---"
+      
     command: |
       source "$HOME/.cargo/env"
-      echo "--- Verificando instalaciones... ---"
-      sui --version
-      cargo --version
-      echo ""
-      echo "✅ ¡Entorno 100% listo y automatizado! Bienvenido de vuelta."
+      echo "✅ Entorno listo. Bienvenido de vuelta, colega."
+      cd sui_contract
 
-# Las otras terminales se quedan igual para nuestro flujo de trabajo.
   - name: Cliente (TypeScript)
     command: |
       echo "✅ Terminal del Cliente lista."
@@ -51,7 +54,3 @@ vscode:
   extensions:
     - rust-lang.rust-analyzer@prerelease
     - esbenp.prettier-vscode
-
-ports:
-  - port: 5173
-    onOpen: open-preview

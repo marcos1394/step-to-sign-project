@@ -1,60 +1,57 @@
-# Contenido para: .gitpod.yml
+# Contenido final y perfeccionado para: .gitpod.yml
 
-# Define las tareas que se ejecutarán al iniciar el workspace.
 tasks:
-  - name: Contrato (Sui)
-    # 'init' se ejecuta solo una vez al crear el workspace desde cero.
-    # Es perfecto para instalaciones pesadas que no cambian.
+  - name: Entorno Sui
     init: |
-      echo "--- Instalando Rust y Cargo (esto solo se ejecutará la primera vez)... ---"
+      echo "--- Automatización de Entorno Profesional Iniciada ---"
+
+      echo "-> Instalando Rust y Cargo..."
       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
       
-      echo "--- Instalando Sui CLI desde binarios... ---"
-      # 'source' es necesario para que el comando 'cargo' esté disponible inmediatamente.
+      # Hacemos 'source' aquí para que los siguientes comandos puedan usar 'cargo'.
       source "$HOME/.cargo/env"
-      wget -O sui.tgz https://github.com/MystenLabs/sui/releases/download/testnet-v1.50.1/sui-testnet-v1.50.1-ubuntu-x86_64.tgz
+      
+      # ¡IMPORTANTE! Usamos la versión 1.51.0 para que coincida con la devnet.
+      echo "-> Instalando Sui CLI v1.51.0 desde binarios..."
+      wget -O sui.tgz https://github.com/MystenLabs/sui/releases/download/testnet-v1.51.0/sui-testnet-v1.51.0-ubuntu-x86_64.tgz
       tar -xzf sui.tgz
-      mv sui-testnet-v1.50.1-ubuntu-x86_64/sui ~/.cargo/bin/
+      mv sui-testnet-v1.51.0-ubuntu-x86_64/sui ~/.cargo/bin/
       rm sui.tgz
-      rm -rf sui-testnet-v1.50.1-ubuntu-x86_64
+      rm -rf sui-testnet-v1.51.0-ubuntu-x86_64
+
+      echo "-> Configurando cliente de Sui para devnet..."
+      # Automatizamos la creación del entorno devnet.
+      sui client new-env --alias devnet --rpc https://fullnode.devnet.sui.io:443
+      
+      echo "-> Instalando dependencias del cliente TypeScript..."
+      cd app_client_logic
+      npm install
+      cd ..
+
       echo "--- Instalación de herramientas base completada. ---"
-    # 'command' se ejecuta CADA VEZ que abres o reinicias el workspace.
     command: |
       source "$HOME/.cargo/env"
       echo "--- Verificando instalaciones... ---"
       sui --version
-      echo "--- Entorno del Contrato listo. ---"
-      cd sui_contract
-      echo "✅ Estás en la carpeta del contrato. Usa 'sui move build' para compilar."
+      cargo --version
+      echo ""
+      echo "✅ ¡Entorno 100% listo y automatizado! Bienvenido de vuelta."
 
+# Las otras terminales se quedan igual para nuestro flujo de trabajo.
   - name: Cliente (TypeScript)
-    # Esta terminal se abrirá al lado de la del contrato.
-    init: |
-      echo "--- Instalando dependencias del cliente... ---"
-      cd app_client_logic
-      npm install
-      cd ..
     command: |
-      echo "--- Entorno del Cliente listo. ---"
+      echo "✅ Terminal del Cliente lista."
       cd app_client_logic
-      echo "✅ Estás en la carpeta del cliente. Usa 'npx ts-node create_wallet.ts' para ejecutar."
 
   - name: General / Git
-    # Una tercera terminal para comandos generales.
     command: |
-      echo "✅ Terminal principal lista para comandos de Git."
+      echo "✅ Terminal General lista para comandos de Git."
 
-# Configuración del editor VS Code dentro de Gitpod.
 vscode:
-  # Lista de extensiones recomendadas. Gitpod te sugerirá instalarlas.
   extensions:
-    - rust-lang.rust-analyzer
+    - rust-lang.rust-analyzer@prerelease
     - esbenp.prettier-vscode
-    - ms-vscode.vscode-typescript-next
 
-# Configuración de puertos.
 ports:
-  # Expone el puerto 5173, común para frameworks de frontend como Vite.
   - port: 5173
-    # Cuando el puerto se active, abre una vista previa en Gitpod.
     onOpen: open-preview

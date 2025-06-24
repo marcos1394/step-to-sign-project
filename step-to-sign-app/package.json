@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@mysten/sui": "^1.34.0",
+    "@mysten/suins": "^0.7.25",
     "buffer": "^6.0.3",
     "expo": "~53.0.12",
     "expo-status-bar": "~2.2.3",

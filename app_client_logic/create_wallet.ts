@@ -1,64 +1,58 @@
-// Contenido para: create_wallet.ts (versión con claves reales)
+// Contenido final para: create_wallet.ts
 
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
+import { MultiSigPublicKey } from '@mysten/sui/multisig';
 import { getFaucetHost, requestSuiFromFaucetV2 } from '@mysten/sui/faucet';
 
-const PACKAGE_ID = '0xe1fb34ee01e46ac246d33177c66d5465114328edbff0a92adeaea31d81ba9791';
-const SENDER_SECRET_KEY_SUI = 'suiprivkey1qrzm68nkfqhqu9ydmg52pmhdh8x5aq78m6tx8rx3yhl744zc8yz6uj5g0ru';
+// --- CONFIGURACIÓN ---
+// ¡¡ID Definitivo!! Obtenido de tu último despliegue.
+const PACKAGE_ID = '0x16627327336aab2d089fff11c0c32bcd82a1693f820476ec762a047ea8588e46';
 
-// Las mismas claves secretas que usaremos para firmar en el otro script.
-const OWNER_APP_SECRET_KEY = 'suiprivkey1qrd7pnswk69xacz5luuv2ep7kh4xrvvtth7c6t7saflpd865hgzqse2ck5k';
-const SHOE_DEVICE_SECRET_KEY = 'suiprivkey1qq2pwm9skvm6fgmpkucgtncdju5m3lhm673vh20m4400y5erp0225hxnat6';
+// --- PARTICIPANTES ---
+const mainUserKeypair = Ed25519Keypair.fromSecretKey('suiprivkey1qrzm68nkfqhqu9ydmg52pmhdh8x5aq78m6tx8rx3yhl744zc8yz6uj5g0ru');
+const ownerAppKeypair = Ed25519Keypair.fromSecretKey('suiprivkey1qrd7pnswk69xacz5luuv2ep7kh4xrvvtth7c6t7saflpd865hgzqse2ck5k');
+const shoeDeviceKeypair = Ed25519Keypair.fromSecretKey('suiprivkey1qq2pwm9skvm6fgmpkucgtncdju5m3lhm673vh20m4400y5erp0225hxnat6');
+
 
 async function main() {
-    console.log('🚀 Creando una SharedWallet con CLAVES PÚBLICAS REALES...');
     const suiClient = new SuiClient({ url: getFullnodeUrl('devnet') });
 
-    const senderKeypair = Ed25519Keypair.fromSecretKey(SENDER_SECRET_KEY_SUI);
-    console.log(`👤 Usando la dirección del sender: ${senderKeypair.getPublicKey().toSuiAddress()}`);
-
-    // ¡NUEVO! Creamos los keypairs para obtener sus claves públicas REALES.
-    const ownerKeypair = Ed25519Keypair.fromSecretKey(OWNER_APP_SECRET_KEY);
-    const shoeKeypair = Ed25519Keypair.fromSecretKey(SHOE_DEVICE_SECRET_KEY);
-
-    // Obtenemos los bytes de las claves públicas.
-    const owner_pubkey_bytes = ownerKeypair.getPublicKey().toRawBytes();
-    const shoe_pubkey_bytes = shoeKeypair.getPublicKey().toRawBytes();
+    console.log('--- Creando y Configurando la Billetera Multi-Firma (Método Definitivo) ---');
     
-    console.log('🧱 Construyendo la transacción para registrar las claves públicas reales...');
+    const multiSigPublicKey = MultiSigPublicKey.fromPublicKeys({
+        threshold: 2, 
+        publicKeys: [
+            { publicKey: ownerAppKeypair.getPublicKey(), weight: 1 },
+            { publicKey: shoeDeviceKeypair.getPublicKey(), weight: 1 },
+        ]
+    });
+    const multiSigAddress = multiSigPublicKey.toSuiAddress();
+    console.log(`✅ Dirección Multi-Firma creada: ${multiSigAddress}`);
+
+    await requestSuiFromFaucetV2({ host: getFaucetHost('devnet'), recipient: mainUserKeypair.getPublicKey().toSuiAddress() });
+    console.log(`💧 Fondos solicitados para la billetera principal del usuario.`);
+
     const txb = new Transaction();
-    txb.moveCall({
-        target: `${PACKAGE_ID}::shared_wallet::create_wallet`,
-        arguments: [
-            txb.pure.vector('u8', Array.from(owner_pubkey_bytes)),
-            txb.pure.vector('u8', Array.from(shoe_pubkey_bytes)),
-        ],
-    });
-
-    console.log('✍️ Firmando y ejecutando la transacción de creación...');
-    const result = await suiClient.signAndExecuteTransaction({
-        signer: senderKeypair,
-        transaction: txb,
-        options: { showObjectChanges: true },
-    });
-
-    console.log('✅ Transacción de creación ejecutada con éxito. Digest:', result.digest);
-
-    const createdObject = result.objectChanges?.find(
-        (change) => (change.type === 'created' && change.objectType.endsWith('::shared_wallet::SharedWallet'))
-    );
+    const walletObject = txb.moveCall({ target: `${PACKAGE_ID}::shared_wallet::create_wallet` });
+    txb.transferObjects([walletObject], txb.pure.address(multiSigAddress));
     
-    if (createdObject && 'objectId' in createdObject) {
-        const walletId = createdObject.objectId;
-        console.log('🎉 ¡NUEVA SharedWallet creada con éxito! ID del Objeto:', walletId);
-        console.log('‼️ COPIA ESTE NUEVO ID Y PÉGALO EN EL SCRIPT `execute_transfer.ts`');
-        console.log(`🔍 Explora tu nuevo objeto aquí: https://suiscan.xyz/devnet/object/${walletId}`);
-    }
+    console.log('🚀 Creando y transfiriendo la SharedWallet a la dirección Multi-Firma...');
+    const createResult = await suiClient.signAndExecuteTransaction({ signer: mainUserKeypair, transaction: txb, options: { showObjectChanges: true } });
+    
+    await suiClient.waitForTransaction({ digest: createResult.digest });
+    
+    const createdWalletChange = createResult.objectChanges?.find(
+        (c) => c.type === 'created' && c.objectType.endsWith('::shared_wallet::SharedWallet')
+    );
+    if (!createdWalletChange || !('objectId' in createdWalletChange)) throw new Error("Fallo al crear la SharedWallet.");
+    const sharedWalletId = createdWalletChange.objectId;
+    
+    console.log("\n----------------------------------------------------");
+    console.log(`🎉 ¡NUEVA SharedWallet creada con éxito! ID del Objeto: ${sharedWalletId}`);
+    console.log('‼️ COPIA ESTE NUEVO ID. Lo necesitaremos para el script `multisig_test.ts`.');
+    console.log("----------------------------------------------------");
 }
 
-main().catch((error) => {
-    console.error('❌ Ocurrió un error:', error);
-    process.exit(1);
-});
+main().catch(console.error);

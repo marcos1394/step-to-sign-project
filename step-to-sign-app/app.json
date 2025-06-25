@@ -30,7 +30,9 @@
       "package": "com.anonymous.steptosignapp",
       "permissions": [
         "android.permission.BLUETOOTH_SCAN",
-        "android.permission.BLUETOOTH_CONNECT"
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN"
       ]
     },
     "web": {
@@ -38,6 +40,11 @@
     },
     "plugins": [
       "react-native-ble-plx"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "9ace1b47-33f4-4197-b527-4eb65cafd37d"
+      }
+    }
   }
 }

@@ -39,7 +39,8 @@
     },
     "plugins": [
       "react-native-ble-plx",
-      "@react-native-firebase/app"
+      "@react-native-firebase/app",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {

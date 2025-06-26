@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Step-to-Sign",
+    "slug": "step-to-sign-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.steptosignapp",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "Nuestra app usa Bluetooth para conectarse al zapato Step-to-Sign.",
+        "NSBluetoothPeripheralUsageDescription": "Nuestra app usa Bluetooth para encontrar y conectarse al zapato Step-to-Sign."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.anonymous.steptosignapp",
+      "permissions": [
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT"
+      ],
+      "googleServicesFile": "./google-services.json"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "react-native-ble-plx",
+      "@react-native-firebase/app"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "9ace1b47-33f4-4197-b527-4eb65cafd37d"
+      }
+    }
+  }
+}

@@ -1,0 +1,77 @@
+# Archivos de Sistema Operativo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependencias de Node.js
+# No queremos subir gigabytes de librerías, cada desarrollador las instala.
+**/node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Archivos de Entorno Local
+# ¡MUY IMPORTANTE para la seguridad!
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Artefactos de Compilación de TypeScript
+*.tsbuildinfo
+dist/
+build/
+
+# Archivos de la App Móvil (Expo y EAS)
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+eas-build-pre-upload.tar.gz
+
+# Credenciales de Servicios
+# ¡CRÍTICO PARA LA SEGURIDAD!
+firebase-credentials.json
+google-services.json
+
+# Cache de Python
+__pycache__/
+*.pyc
+
+# Artefactos del Editor VSCode
+.vscode/
+
+# Archivos de Caches de Gitpod
+/workspace/.gradle/
+/home/gitpod/.gradle/
+
+# Archivos temporales de compilación del contrato de Sui
+/sui_contract/build/
+
+# -------------------------------------------------------------------
+# --- AÑADIDOS PARA COMPILACIÓN LOCAL DE ANDROID (¡IMPORTANTE!) ---
+# -------------------------------------------------------------------
+
+# Ignorar por completo la carpeta del Android SDK si se descarga localmente
+android_sdk/
+
+# Archivos binarios de la compilación
+*.apk
+*.aab
+
+# Carpeta de build de la app
+/mobile-app/android/
+/step-to-sign-app/android/
+/step-to-sign-app/build/
+
+# Archivos de configuración local de Android Studio
+/local.properties
+/.idea/

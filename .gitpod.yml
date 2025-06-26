@@ -1,0 +1,55 @@
+# Contenido definitivo y robusto para: .gitpod.yml
+
+tasks:
+  - name: Entorno Sui y Contrato
+    init: |
+      echo "--- [FASE 1/5] Iniciando Instalación de Rust y Cargo... ---"
+      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+      
+      # Hacemos 'export' del PATH para que esté disponible para los siguientes comandos.
+      export PATH="$HOME/.cargo/bin:$PATH"
+      
+      echo "\n--- [FASE 2/5] Verificando Cargo... ---"
+      cargo --version
+      
+      # --- LA CORRECCIÓN CLAVE ---
+      # Usamos el script de instalación oficial de Sui. Es más robusto que wget.
+      echo "\n--- [FASE 3/5] Instalando Sui CLI (Método Oficial)... ---"
+      curl -L https://get.sui.io | sh -
+      
+      echo "\n--- [FASE 4/5] Configurando cliente de Sui para devnet... ---"
+      # Ahora el comando 'sui' se encontrará sin problemas.
+      sui client new-env --alias devnet --rpc https://fullnode.devnet.sui.io:443
+      sui client switch --env devnet
+
+      echo "\n--- [FASE 5/5] Instalando dependencias del cliente TypeScript... ---"
+      cd app_client_logic
+      npm install
+      
+      echo "\n\n--- ✅ Instalación de herramientas base completada. ---"
+      
+    command: |
+      source "$HOME/.cargo/env"
+      echo "--- Verificando instalaciones... ---"
+      sui --version
+      cargo --version
+      echo ""
+      echo "✅ ¡Entorno 100% listo y automatizado! Bienvenido de vuelta."
+      cd sui_contract
+
+  # Las otras terminales para nuestro flujo de trabajo
+  - name: Cliente (TypeScript)
+    command: |
+      source "$HOME/.cargo/env"
+      echo "✅ Terminal del Cliente lista."
+      cd app_client_logic
+
+  - name: General / Git
+    command: |
+      source "$HOME/.cargo/env"
+      echo "✅ Terminal General lista para comandos de Git."
+
+vscode:
+  extensions:
+    - rust-lang.rust-analyzer@prerelease
+    - esbenp.prettier-vscode

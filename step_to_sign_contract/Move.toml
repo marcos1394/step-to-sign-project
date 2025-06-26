@@ -1,0 +1,11 @@
+[package]
+name = "StepToSign"
+version = "0.0.1"
+edition = "2024.alpha"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet" }
+
+[addresses]
+# Aquí está la clave: aseguramos que la dirección sea el placeholder 0x0
+step_to_sign = "0x0"

@@ -1,170 +1,244 @@
-// Contenido final y completo para: mobile-app/src/screens/WalletScreen.tsx
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Text,
+  View,
+  TextInput,
+  TouchableOpacity,
+  SafeAreaView,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  Vibration,
+  Platform,
+  KeyboardAvoidingView,
+} from 'react-native';
+// --- Hooks y Contextos ---
+import { useAuth } from '../context/AuthContext';
+import useBLE from '../hooks/useBLE';
+// --- Iconos y Navegación ---
+import { useNavigation } from '@react-navigation/native';
+import { Wallet, Send, CheckCircle, XCircle, ScanLine } from 'lucide-react-native';
+// --- Lógica de Sui ---
+import {
+  getFormattedBalance,
+  resolveSuiNsAddress,
+  executeCoSignedTransaction,
+  findUserWallet,
+  createUserWallet,
+  AuthData // Importamos el tipo para claridad
+} from '../lib/sui';
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, StatusBar, ActivityIndicator, TouchableOpacity, Alert, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-// CORRECCIÓN: Importamos la dirección MULTISIG_ADDRESS directamente desde nuestro servicio.
-import { getFormattedBalance, resolveSuiNsAddress, executeMultiSigTransfer, MULTISIG_ADDRESS } from '../lib/sui'; 
+// Para la demo, la clave pública del zapato es una constante.
+// En un producto real, se obtendría durante el emparejamiento BLE.
+const SHOE_PUBLIC_KEY_B64 = "uH6ZLvQdoYibgJ/RyecoLltHI/B1/ljHSHzF8zqu5bi9x5ffzOqrTjSP+sAC7Lse+QV6EnTQsXLX2qQzKo5uRQ==";
 
-export default function WalletScreen() {
-  const [balance, setBalance] = useState('...');
-  const [isLoadingBalance, setIsLoadingBalance] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+
+const WalletScreen = () => {
+  const navigation = useNavigation<any>();
+const { userData: authData } = useAuth(); // Le decimos: "Toma 'userData' y llámalo 'authData'"
+  const { connectedDevice, sendTxHash, waitForShoeSignature } = useBLE();
+
+  // --- ESTADOS DE LA PANTALLA ---
+  const [userBalance, setUserBalance] = useState('0.00 SUI');
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
-  const [resolvedAddress, setResolvedAddress] = useState<string | null>(null);
-  const [isResolving, setIsResolving] = useState(false);
+  const [sharedWalletId, setSharedWalletId] = useState<string | null>(null);
 
-  const fetchBalance = async () => {
-    setIsLoadingBalance(true);
-    const fetchedBalance = await getFormattedBalance(MULTISIG_ADDRESS);
-    setBalance(fetchedBalance);
-    setIsLoadingBalance(false);
-  };
+  const [isLoading, setIsLoading] = useState(true);
+  const [isProcessingTx, setIsProcessingTx] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
 
+  // --- LÓGICA DE INICIALIZACIÓN Y ACTUALIZACIÓN ---
+
+  // Usamos useCallback para memorizar la función y evitar re-renders innecesarios
+  const setupUserWallet = useCallback(async () => {
+    if (!authData) return;
+
+    setIsLoading(true);
+    setStatusMessage('Buscando tu bóveda personal...');
+    try {
+        const existingWalletId = await findUserWallet(authData.address);
+        if (existingWalletId) {
+            setSharedWalletId(existingWalletId);
+            setStatusMessage('Bóveda personal encontrada.');
+        } else {
+            setStatusMessage('No tienes una bóveda. Creando una nueva para ti...');
+            Vibration.vibrate();
+            // CORRECCIÓN: Pasamos los argumentos necesarios a createUserWallet
+            const newWalletId = await createUserWallet(authData, SHOE_PUBLIC_KEY_B64);
+            setSharedWalletId(newWalletId);
+            Alert.alert('¡Bóveda Creada!', `Se ha creado y vinculado tu nueva bóveda personal a tu zapato.`);
+            setStatusMessage('¡Bóveda lista!');
+        }
+    } catch (error: any) {
+        Alert.alert('Error de Configuración', 'No se pudo crear o encontrar tu bóveda personal: ' + error.message);
+        setStatusMessage('Error al configurar la bóveda.');
+    } finally {
+        setIsLoading(false);
+    }
+  }, [authData]);
+
+  // Efecto para inicializar todo cuando el usuario se autentica
   useEffect(() => {
-    fetchBalance();
-  }, []);
-  
-  const handleResolveName = async () => {
-    if (!recipient.endsWith('.sui')) {
-      Alert.alert("Nombre Inválido", "Por favor, introduce un nombre que termine en .sui");
-      return;
+    if (authData?.address) {
+        getFormattedBalance(authData.address).then(setUserBalance);
+        setupUserWallet();
     }
-    setIsResolving(true);
-    const address = await resolveSuiNsAddress(recipient);
-    setIsResolving(false);
-    if (address) {
-      setResolvedAddress(address);
-      Alert.alert("Éxito", `El nombre '${recipient}' resuelve a:\n\n${address}`);
-    } else {
-      setResolvedAddress(null);
-      Alert.alert("Error", `No se pudo resolver el nombre '${recipient}'.`);
-    }
-  };
+  }, [authData, setupUserWallet]);
+
+
+  // --- LÓGICA DE TRANSFERENCIA (EL CORAZÓN DE LA APP) ---
 
   const handleTransfer = async () => {
-    const finalRecipient = resolvedAddress || recipient;
-    const amountMIST = parseFloat(amount) * 1_000_000_000;
-
-    if (!finalRecipient || isNaN(amountMIST) || amountMIST <= 0) {
-      Alert.alert("Datos Inválidos", "Por favor, introduce una dirección y un monto válidos.");
+    if (!authData || !connectedDevice || !sharedWalletId) {
+      Alert.alert('Requisitos no cumplidos', 'Asegúrate de haber iniciado sesión y de que tu zapato esté conectado.');
       return;
     }
-    
-    setIsSubmitting(true);
+
+    setIsProcessingTx(true);
+    Vibration.vibrate();
+
     try {
-      const digest = await executeMultiSigTransfer(finalRecipient, amountMIST);
-      Alert.alert("¡Transferencia Exitosa!", `La transacción se completó.\n\nDigest: ${digest.slice(0, 10)}...`);
+      let finalRecipient = recipient;
+      if (recipient.endsWith('.sui')) {
+        setStatusMessage('Resolviendo dirección .sui...');
+        const resolved = await resolveSuiNsAddress(recipient);
+        if (!resolved) throw new Error('No se pudo resolver el nombre .sui');
+        finalRecipient = resolved;
+      }
+      
+      const amountMIST = BigInt(parseFloat(amount) * 1_000_000_000);
+      if (isNaN(Number(amountMIST)) || amountMIST <= 0) {
+        throw new Error("El monto introducido no es válido.");
+      }
+      
+      // Llamamos a la función cerebral pasándole todo lo que necesita
+      const digest = await executeCoSignedTransaction({
+        authData,
+        ble: { sendTxHash, waitForShoeSignature },
+        recipientAddress: finalRecipient,
+        amountMIST,
+        sharedWalletId,
+      });
+
+      setStatusMessage('');
+      Alert.alert('¡Transacción Exitosa!', `Tu transferencia se ha completado.\n\nDigest: ${digest.slice(0, 20)}...`);
+      Vibration.vibrate([0, 100, 100, 100]); 
+      // Limpiamos el formulario
       setRecipient('');
       setAmount('');
-      setResolvedAddress(null);
-      await fetchBalance();
+
     } catch (error: any) {
-      console.error(error);
-      Alert.alert("Error en la Transacción", `Ocurrió un error: ${error.message}`);
+      console.error("Error durante la transferencia:", error);
+      Alert.alert('Error en la Transacción', error.message);
     } finally {
-      setIsSubmitting(false);
+      setIsProcessingTx(false);
+      // Actualizamos el saldo
+      if (authData?.address) {
+          getFormattedBalance(authData.address).then(setUserBalance);
+      }
     }
   };
 
+  // --- RENDERIZADO DE LA UI ---
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{flex: 1}}/>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{flex: 1}}>
+        <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <Text style={styles.title}>Step-to-Sign Wallet</Text>
+            <Wallet color="#3b82f6" size={40} />
+            <Text style={styles.title}>Mi Bóveda Step-to-Sign</Text>
+            <View style={styles.balanceContainer}>
+              <Text style={styles.balanceLabel}>Saldo (para Gas)</Text>
+              <Text style={styles.balanceText}>{userBalance}</Text>
+            </View>
           </View>
-          
-          <View style={styles.content}>
-            <Text style={styles.balanceLabel}>Saldo de la Bóveda</Text>
-            {isLoadingBalance ? <ActivityIndicator size="large" color="#fff" style={styles.balanceContainer} /> : <Text style={styles.balanceAmount}>{balance}</Text>}
-            <Text style={styles.addressLabel}>Dirección Multi-Firma:</Text>
-            <Text style={styles.addressText}>{MULTISIG_ADDRESS}</Text>
 
-            <View style={styles.formContainer}>
-              <Text style={styles.inputLabel}>Enviar a (dirección o nombre.sui)</Text>
-              <View style={styles.inputRow}>
+          <TouchableOpacity 
+              style={[styles.connectionBanner, connectedDevice ? styles.connected : styles.disconnected]}
+              onPress={() => navigation.navigate('Calibración IA')} // Cambiado para ir a la pantalla de conexión
+          >
+              {connectedDevice ? <CheckCircle color="#22c55e" size={20}/> : <XCircle color="#dc2626" size={20}/>}
+              <Text style={styles.connectionText}>
+                  {connectedDevice ? `Zapato Conectado: ${connectedDevice.name}` : 'Zapato Desconectado - Toca para conectar'}
+              </Text>
+          </TouchableOpacity>
+
+          {isLoading ? (
+            <View style={styles.statusBox}><ActivityIndicator /><Text style={styles.statusMessage}>{statusMessage}</Text></View>
+          ) : (
+            <View style={styles.form}>
+              <Text style={styles.label}>Enviar a (dirección o .sui)</Text>
+              <View style={styles.inputContainer}>
                 <TextInput
                   style={styles.input}
-                  placeholder="ej. demo.sui o 0x..."
+                  placeholder="0x... o nombre.sui"
                   placeholderTextColor="#475569"
                   value={recipient}
-                  onChangeText={(text) => {
-                    setRecipient(text);
-                    setResolvedAddress(null);
-                  }}
-                  autoCapitalize="none"
-                  autoCorrect={false}
+                  onChangeText={setRecipient}
                 />
-                {recipient.endsWith('.sui') && (
-                  <TouchableOpacity onPress={handleResolveName} style={styles.resolveButton} disabled={isResolving}>
-                    {isResolving ? <ActivityIndicator color="#fff" size="small"/> : <Text style={styles.buttonText}>Resolver</Text>}
-                  </TouchableOpacity>
-                )}
               </View>
-              {resolvedAddress && <Text style={styles.resolvedText}>Resuelto a: {resolvedAddress.slice(0, 10)}...{resolvedAddress.slice(-8)}</Text>}
-              
-              <Text style={styles.inputLabel}>Monto (SUI)</Text>
+
+              <Text style={styles.label}>Monto (SUI)</Text>
               <TextInput
                 style={styles.input}
-                placeholder="ej. 0.01"
+                placeholder="0.0"
                 placeholderTextColor="#475569"
                 keyboardType="numeric"
                 value={amount}
                 onChangeText={setAmount}
               />
-              
-              <TouchableOpacity style={[styles.button, isSubmitting && styles.buttonDisabled]} onPress={handleTransfer} disabled={isSubmitting}>
-                {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Firmar y Enviar</Text>}
-              </TouchableOpacity>
             </View>
+          )}
+
+          <View style={styles.actionContainer}>
+              {isProcessingTx ? (
+                  <View style={styles.statusBox}>
+                      <ActivityIndicator color="#3b82f6" size="large"/>
+                      <Text style={styles.statusMessage}>{statusMessage}</Text>
+                  </View>
+              ) : (
+                  <TouchableOpacity
+                      style={[styles.button, (!connectedDevice || !recipient || !amount || isLoading) && styles.buttonDisabled]}
+                      onPress={handleTransfer}
+                      disabled={!connectedDevice || !recipient || !amount || isLoading}
+                  >
+                      <Send color="#fff" style={styles.buttonIcon} />
+                      <Text style={styles.buttonText}>Firmar y Enviar</Text>
+                  </TouchableOpacity>
+              )}
           </View>
         </ScrollView>
-      </SafeAreaView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
-}
+};
 
+// Estilos
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#0f172a' },
-    scrollContent: { flexGrow: 1 },
-    header: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#1e293b' },
-    title: { fontSize: 24, fontWeight: 'bold', color: '#fff', textAlign: 'center' },
-    content: { flex: 1, alignItems: 'center', padding: 20 },
-    balanceLabel: { fontSize: 18, color: '#94a3b8', marginTop: 20 },
-    balanceContainer: { height: 60, marginVertical: 10, justifyContent: 'center' },
-    balanceAmount: { fontSize: 48, fontWeight: 'bold', color: '#fff', marginVertical: 10, height: 60 },
-    addressLabel: { fontSize: 16, color: '#94a3b8' },
-    addressText: { fontSize: 12, color: '#64748b', fontFamily: 'monospace', marginTop: 8, marginBottom: 20, paddingHorizontal: 10 },
-    formContainer: { width: '100%', marginTop: 20, paddingTop: 20, borderTopColor: '#1e293b', borderTopWidth: 1 },
-    inputLabel: { color: '#cbd5e1', marginBottom: 8, marginLeft: 5 },
-    inputRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
-    input: {
-        flex: 1,
-        backgroundColor: '#1e293b',
-        color: '#fff',
-        paddingVertical: 15,
-        paddingHorizontal: 20,
-        borderRadius: 10,
-        fontSize: 16,
-    },
-    resolveButton: {
-        marginLeft: 10,
-        backgroundColor: '#1e40af',
-        paddingHorizontal: 15,
-        height: 54,
-        justifyContent: 'center',
-        borderRadius: 10,
-    },
-    buttonText: { color: '#fff', fontWeight: 'bold' },
-    resolvedText: { color: '#22c55e', fontSize: 12, marginTop: -10, marginBottom: 15, marginLeft: 5, fontFamily: 'monospace' },
-    button: {
-        marginTop: 20,
-        backgroundColor: '#2563eb',
-        paddingVertical: 15,
-        borderRadius: 30,
-        width: '100%',
-        alignItems: 'center',
-    },
-    buttonDisabled: { backgroundColor: '#1e40af' },
+    scrollContainer: { flexGrow: 1, padding: 20 },
+    header: { alignItems: 'center', marginBottom: 20 },
+    title: { fontSize: 24, fontWeight: 'bold', color: '#fff', marginTop: 10 },
+    balanceContainer: { marginTop: 15, paddingVertical: 10, paddingHorizontal: 20, backgroundColor: '#1e293b', borderRadius: 10 },
+    balanceLabel: { color: '#94a3b8', fontSize: 12, textAlign: 'center' },
+    balanceText: { fontSize: 22, color: '#e2e8f0', fontWeight: '600' },
+    connectionBanner: { flexDirection: 'row', alignItems: 'center', padding: 15, borderRadius: 10, marginBottom: 20, borderWidth: 1 },
+    connected: { backgroundColor: 'rgba(34, 197, 94, 0.1)', borderColor: '#22c55e' },
+    disconnected: { backgroundColor: 'rgba(220, 38, 38, 0.1)', borderColor: '#dc2626' },
+    connectionText: { color: '#e2e8f0', marginLeft: 10, fontSize: 16 },
+    form: { marginBottom: 20 },
+    label: { color: '#94a3b8', fontSize: 16, marginBottom: 10 },
+    inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1e293b', borderRadius: 10, marginBottom: 20 },
+    input: { flex: 1, padding: 15, color: '#fff', fontSize: 16 },
+    actionContainer: { height: 100, justifyContent: 'center', alignItems: 'center' },
+    statusBox: { alignItems: 'center', padding: 20 },
+    statusMessage: { color: '#cbd5e1', marginTop: 15, fontSize: 16, textAlign: 'center' },
+    button: { flexDirection: 'row', backgroundColor: '#2563eb', padding: 18, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    buttonDisabled: { backgroundColor: '#1e40af', opacity: 0.7 },
+    buttonIcon: { marginRight: 10 },
+    buttonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
 });
+
+export default WalletScreen;

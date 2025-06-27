@@ -36,7 +36,7 @@ const SHOE_PUBLIC_KEY_B64 = "uH6ZLvQdoYibgJ/RyecoLltHI/B1/ljHSHzF8zqu5bi9x5ffzOq
 
 const WalletScreen = () => {
   const navigation = useNavigation<any>();
-const { userData: authData } = useAuth(); // Le decimos: "Toma 'userData' y llámalo 'authData'"
+const { userData } = useAuth(); // Le decimos: "Toma 'userData' y llámalo 'authData'"
   const { connectedDevice, sendTxHash, waitForShoeSignature } = useBLE();
 
   // --- ESTADOS DE LA PANTALLA ---
@@ -53,12 +53,12 @@ const { userData: authData } = useAuth(); // Le decimos: "Toma 'userData' y llá
 
   // Usamos useCallback para memorizar la función y evitar re-renders innecesarios
   const setupUserWallet = useCallback(async () => {
-    if (!authData) return;
+    if (!userData) return;
 
     setIsLoading(true);
     setStatusMessage('Buscando tu bóveda personal...');
     try {
-        const existingWalletId = await findUserWallet(authData.address);
+        const existingWalletId = await findUserWallet(userData.address);
         if (existingWalletId) {
             setSharedWalletId(existingWalletId);
             setStatusMessage('Bóveda personal encontrada.');
@@ -66,7 +66,7 @@ const { userData: authData } = useAuth(); // Le decimos: "Toma 'userData' y llá
             setStatusMessage('No tienes una bóveda. Creando una nueva para ti...');
             Vibration.vibrate();
             // CORRECCIÓN: Pasamos los argumentos necesarios a createUserWallet
-            const newWalletId = await createUserWallet(authData, SHOE_PUBLIC_KEY_B64);
+            const newWalletId = await createUserWallet(userData, SHOE_PUBLIC_KEY_B64);
             setSharedWalletId(newWalletId);
             Alert.alert('¡Bóveda Creada!', `Se ha creado y vinculado tu nueva bóveda personal a tu zapato.`);
             setStatusMessage('¡Bóveda lista!');
@@ -77,21 +77,21 @@ const { userData: authData } = useAuth(); // Le decimos: "Toma 'userData' y llá
     } finally {
         setIsLoading(false);
     }
-  }, [authData]);
+  }, [userData]);
 
   // Efecto para inicializar todo cuando el usuario se autentica
   useEffect(() => {
-    if (authData?.address) {
-        getFormattedBalance(authData.address).then(setUserBalance);
+    if (userData?.address) {
+        getFormattedBalance(userData.address).then(setUserBalance);
         setupUserWallet();
     }
-  }, [authData, setupUserWallet]);
+  }, [userData, setupUserWallet]);
 
 
   // --- LÓGICA DE TRANSFERENCIA (EL CORAZÓN DE LA APP) ---
 
   const handleTransfer = async () => {
-    if (!authData || !connectedDevice || !sharedWalletId) {
+    if (!userData || !connectedDevice || !sharedWalletId) {
       Alert.alert('Requisitos no cumplidos', 'Asegúrate de haber iniciado sesión y de que tu zapato esté conectado.');
       return;
     }
@@ -114,13 +114,15 @@ const { userData: authData } = useAuth(); // Le decimos: "Toma 'userData' y llá
       }
       
       // Llamamos a la función cerebral pasándole todo lo que necesita
-      const digest = await executeCoSignedTransaction({
-        authData,
+      // ... dentro de handleTransfer
+    const digest = await executeCoSignedTransaction({
+        // CORRECCIÓN: Le asignamos el valor de nuestra constante 'userData' a la propiedad 'authData'.
+        authData: userData, 
         ble: { sendTxHash, waitForShoeSignature },
         recipientAddress: finalRecipient,
         amountMIST,
         sharedWalletId,
-      });
+    });
 
       setStatusMessage('');
       Alert.alert('¡Transacción Exitosa!', `Tu transferencia se ha completado.\n\nDigest: ${digest.slice(0, 20)}...`);
@@ -135,8 +137,8 @@ const { userData: authData } = useAuth(); // Le decimos: "Toma 'userData' y llá
     } finally {
       setIsProcessingTx(false);
       // Actualizamos el saldo
-      if (authData?.address) {
-          getFormattedBalance(authData.address).then(setUserBalance);
+      if (userData?.address) {
+          getFormattedBalance(userData.address).then(setUserBalance);
       }
     }
   };

@@ -16,6 +16,8 @@ WebBrowser.maybeCompleteAuthSession();
 interface UserData {
   address: string;
   salt: string;
+  jwt: string; 
+
 }
 
 interface AuthContextData {
@@ -76,13 +78,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       // Generamos una "sal" para el usuario. En una app real, esta sal se debe
       // guardar de forma segura y ser la misma para cada login del mismo usuario.
-      const userSalt = generateRandomness();
+      const salt = generateRandomness();
 
       // Generamos la dirección zkLogin.
-      const address = jwtToAddress(jwt, userSalt);
+      const address = jwtToAddress(jwt, salt);
       
       console.log(`✅ Dirección Sui generada con éxito: ${address}`);
-      setUserData({ address, salt: userSalt });
+      setUserData({ address, salt, jwt }); // Guardamos los 3 datos
 
     } catch (error) {
       console.error("Error en el flujo de zkLogin:", error);

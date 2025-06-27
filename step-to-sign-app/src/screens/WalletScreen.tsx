@@ -26,7 +26,8 @@ import {
   executeCoSignedTransaction,
   findUserWallet,
   createUserWallet,
-  AuthData // Importamos el tipo para claridad
+  AuthData, // Importamos el tipo para claridad
+  executeEmergencyWithdrawal
 } from '../lib/sui';
 
 // Para la demo, la clave pública del zapato es una constante.
@@ -37,8 +38,7 @@ const SHOE_PUBLIC_KEY_B64 = "uH6ZLvQdoYibgJ/RyecoLltHI/B1/ljHSHzF8zqu5bi9x5ffzOq
 const WalletScreen = () => {
   const navigation = useNavigation<any>();
 const { userData } = useAuth(); // Le decimos: "Toma 'userData' y llámalo 'authData'"
-  const { connectedDevice, sendTxHash, waitForShoeSignature } = useBLE();
-
+const { connectedDevice, sendTxHash, waitForShoeSignature, onPanic } = useBLE();
   // --- ESTADOS DE LA PANTALLA ---
   const [userBalance, setUserBalance] = useState('0.00 SUI');
   const [recipient, setRecipient] = useState('');
@@ -87,7 +87,9 @@ const { userData } = useAuth(); // Le decimos: "Toma 'userData' y llámalo 'auth
     }
   }, [userData, setupUserWallet]);
 
+  // ... después del primer useEffect
 
+ 
   // --- LÓGICA DE TRANSFERENCIA (EL CORAZÓN DE LA APP) ---
 
   const handleTransfer = async () => {
@@ -142,6 +144,50 @@ const { userData } = useAuth(); // Le decimos: "Toma 'userData' y llámalo 'auth
       }
     }
   };
+
+  // --- LÓGICA DE PÁNICO Y RETIRO DE EMERGENCIA ---
+
+  const handlePanicGesture = useCallback(async () => {
+    // Nos aseguramos de tener todo lo necesario para actuar
+    if (!userData || !sharedWalletId) {
+      Alert.alert("Error", "No se puede procesar el gesto de pánico sin datos de usuario o billetera.");
+      return;
+    }
+
+    // Usamos el mismo estado para mostrar un indicador de carga
+    setIsProcessingTx(true);
+    setStatusMessage("¡Gesto de pánico detectado! Activando retiro de emergencia...");
+    Vibration.vibrate(500); // Una vibración larga para alertar al usuario
+
+    try {
+      // La dirección segura será la propia dirección del usuario
+      const safeAddress = userData.address;
+      
+      const digest = await executeEmergencyWithdrawal(sharedWalletId, safeAddress);
+      
+      Alert.alert(
+        "¡Retiro de Emergencia Exitoso!",
+        `Todos los fondos han sido transferidos a tu dirección principal.\n\nDigest: ${digest.slice(0, 20)}...`
+      );
+      // Actualizamos el saldo para que se refleje el cambio
+      getFormattedBalance(userData.address).then(setUserBalance);
+
+    } catch (error: any) {
+      console.error("Error durante el retiro de emergencia:", error);
+      Alert.alert("Error en Retiro de Emergencia", error.message);
+    } finally {
+      setIsProcessingTx(false);
+      setStatusMessage('');
+    }
+  }, [userData, sharedWalletId]); // Dependencias de la función
+
+   // Efecto para suscribirse al evento de pánico del hook BLE
+  useEffect(() => {
+    // La función onPanic registra nuestro 'manejador'
+    // useCallback en el paso anterior previene que esto se ejecute innecesariamente
+    onPanic(handlePanicGesture);
+  }, [onPanic, handlePanicGesture]);
+
 
   // --- RENDERIZADO DE LA UI ---
   return (

@@ -1,38 +1,62 @@
-// Contenido definitivo para: mobile-app/src/lib/sui.ts (con integración de Firebase)
-
 import { Buffer } from 'buffer';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Ed25519Keypair, Ed25519PublicKey } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import { MultiSigPublicKey } from '@mysten/sui/multisig';
+import { blake2b } from '@noble/hashes/blake2b';
 import { SuinsClient } from '@mysten/suins';
-import database from '@react-native-firebase/database';
-import { v4 as uuidv4 } from 'uuid';
+
+// --- Imports de zkLogin ---
+import { generateNonce, generateRandomness, getZkLoginSignature } from '@mysten/sui/zklogin';
+import { getZkLoginPublicIdentifier } from '@mysten/zklogin';
+import { decodeJwt } from 'jose';
+
+// --- INTERFACES Y TIPOS ---
+// Estos tipos nos ayudan a mantener el código limpio y a evitar errores.
+
+// Datos del usuario que obtenemos del AuthContext
+export interface AuthData {
+  address: string;
+  salt: string;
+  jwt: string; 
+}
+
+// Funciones que tomaremos de nuestro hook useBLE
+export interface BleFunctions {
+  sendTxHash: (hash: Uint8Array) => Promise<void>;
+  waitForShoeSignature: () => Promise<string>;
+}
+
+// Parámetros para nuestra función principal de ejecución
+export interface ExecuteTxParams {
+  authData: AuthData;
+  ble: BleFunctions;
+  recipientAddress: string;
+  amountMIST: bigint;
+  sharedWalletId: string;
+}
 
 // --- CONFIGURACIÓN E INSTANCIAS ---
 const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') });
 const suinsClient = new SuinsClient({ client: suiClient, network: 'testnet' });
+const ZK_PROVER_URL = 'https://prover-dev.mystenlabs.com/v1';
 
-// IDs de nuestro despliegue y objetos en TESTNET.
-const PACKAGE_ID = '0x16627327336aab2d089fff11c0c32bcd82a1693f820476ec762a047ea8588e46';
-const SHARED_WALLET_ID = '0x2da445ccd4c591435fe82a08d1a25ea1f5b293a7f1350ccac0f3640c4dd406a2';
+// ¡USAREMOS EL PACKAGE ID QUE YA VALIDAMOS!
+const PACKAGE_ID = '0x1b76449b6c4ba6f5b5c31dec9d578d9b0405ac8b53044b8235e6c2fc6f6d2c59'; 
 
-// --- PARTICIPANTES ---
-const ownerAppKeypair = Ed25519Keypair.fromSecretKey('suiprivkey1qrd7pnswk69xacz5luuv2ep7kh4xrvvtth7c6t7saflpd865hgzqse2ck5k');
-const shoeDeviceKeypair = Ed25519Keypair.fromSecretKey('suiprivkey1qq2pwm9skvm6fgmpkucgtncdju5m3lhm673vh20m4400y5erp0225hxnat6');
-
-const multiSigPublicKey = MultiSigPublicKey.fromPublicKeys({
-    threshold: 2, 
-    publicKeys: [
-        { publicKey: ownerAppKeypair.getPublicKey(), weight: 1 },
-        { publicKey: shoeDeviceKeypair.getPublicKey(), weight: 1 },
-    ]
-});
-export const MULTISIG_ADDRESS = multiSigPublicKey.toSuiAddress();
+// Esta es la clave pública de nuestro zapato, la que nos dio el monitor serial de Wokwi.
+// En un producto real, esto se obtendría durante el proceso de emparejamiento y se guardaría de forma segura.
+const SHOE_PUBLIC_KEY_B64 = "uH6ZLvQdoYibgJ/RyecoLltHI/B1/ljHSHzF8zqu5bi9x5ffzOqrTjSP+sAC7Lse+QV6EnTQsXLX2qQzKo5uRQ==";
+const shoePublicKey = new Ed25519PublicKey(SHOE_PUBLIC_KEY_B64);
 
 
-// --- FUNCIONES EXPORTABLES ---
+// --- FUNCIONES PÚBLICAS EXPORTABLES ---
 
+/**
+ * Obtiene el saldo de una dirección y lo formatea como un string.
+ * @param address La dirección de la cual obtener el saldo.
+ * @returns El saldo formateado (ej. "10.50 SUI") o "Error".
+ */
 export async function getFormattedBalance(address: string): Promise<string> {
   try {
     const balance = await suiClient.getBalance({ owner: address });
@@ -44,6 +68,11 @@ export async function getFormattedBalance(address: string): Promise<string> {
   }
 }
 
+/**
+ * Resuelve un nombre de dominio .sui a su dirección correspondiente.
+ * @param suiNsName El nombre de dominio a resolver (ej. "step-to-sign.sui").
+ * @returns La dirección resuelta o null si no se encuentra.
+ */
 export async function resolveSuiNsAddress(suiNsName: string): Promise<string | null> {
   try {
     const nameRecord = await suinsClient.getNameRecord(suiNsName);
@@ -54,72 +83,94 @@ export async function resolveSuiNsAddress(suiNsName: string): Promise<string | n
   }
 }
 
-export async function executeMultiSigTransfer(recipientAddress: string, amountMIST: number): Promise<string> {
-    console.log('--- Iniciando flujo de transferencia Multi-Firma ---');
-    
-    // 1. Construir la transacción
-    const txb = new Transaction();
-    txb.setSender(MULTISIG_ADDRESS);
-    const gasCoins = await suiClient.getCoins({ owner: MULTISIG_ADDRESS });
-    if (!gasCoins.data.length) throw new Error("La dirección Multi-Firma no tiene monedas de gas para pagar.");
-    txb.setGasPayment([ { objectId: gasCoins.data[0].coinObjectId, version: gasCoins.data[0].version, digest: gasCoins.data[0].digest } ]);
-    const [coin] = txb.splitCoins(txb.gas, [amountMIST]);
-    txb.moveCall({
-        target: `${PACKAGE_ID}::shared_wallet::execute_transfer`,
-        typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
-        arguments: [txb.object(SHARED_WALLET_ID), coin, txb.pure.address(recipientAddress)]
-    });
-    const txBytes = await txb.build({ client: suiClient });
+/**
+ * Orquesta el flujo completo de una transacción multi-firma (zkLogin + Hardware).
+ * Esta es la función principal y más importante de nuestra lógica.
+ */
+export async function executeTransaction({ authData, ble, recipientAddress, amountMIST, sharedWalletId }: ExecuteTxParams): Promise<string> {
+  console.log('--- Iniciando flujo de transferencia Multi-Firma REAL (zkLogin + Hardware) ---');
+  
+  // === PASO 1: Preparar la firma zkLogin (Firma de la App) ===
+  console.log('1. Preparando firma zkLogin...');
+  const { epoch } = await suiClient.getLatestSuiSystemState();
+  const maxEpoch = Number(epoch) + 2;
+  const ephemeralKeypair = new Ed25519Keypair();
+  const randomness = generateRandomness();
+  const nonce = generateNonce(ephemeralKeypair.getPublicKey(), maxEpoch, randomness);
+  const jwtPayload = decodeJwt(authData.jwt);
+  if (!jwtPayload.sub || !jwtPayload.aud) {
+    throw new Error("JWT Inválido. 'sub' o 'aud' no encontrado.");
+  }
 
-    // 2. Firmar con la clave de la app
-    const { signature: appSignature } = await ownerAppKeypair.signTransaction(txBytes);
-    console.log('✅ App ha firmado su parte.');
+  // === PASO 2: Construir la transacción para obtener su hash ===
+  console.log('2. Construyendo la transacción...');
+  const userZkLoginPublicKey = getZkLoginPublicIdentifier(BigInt(authData.salt), "sub", jwtPayload.sub, jwtPayload.aud);
+  const multiSigPublicKey = new MultiSigPublicKey({
+    threshold: 2,
+    publicKeys: [
+      { publicKey: userZkLoginPublicKey, weight: 1 },
+      { publicKey: shoePublicKey, weight: 1 },
+    ],
+  });
+  const multiSigAddress = multiSigPublicKey.toSuiAddress();
+  console.log(`Dirección Multi-Sig dinámica para esta TX: ${multiSigAddress}`);
 
-    // 3. Enviar petición de firma al "zapato" vía Firebase
-    const requestId = uuidv4();
-    const requestRef = database().ref(`/signing_requests/${requestId}`);
-    console.log(`📱 App: Enviando petición de firma a Firebase con ID: ${requestId}`);
-    await requestRef.set({
-        transactionPayload: Buffer.from(txBytes).toString('base64'),
-        timestamp: Date.now()
-    });
+  const txb = new Transaction();
+  txb.setSender(multiSigAddress);
+  // Para la demo, el gas lo paga el Oracle/Creador. En un producto real, el usuario necesitaría gas en su dirección multisig.
+  const { data: gasCoins } = await suiClient.getCoins({ owner: ORACLE_KEYPAIR.getPublicKey().toSuiAddress() });
+  txb.setGasPayment(gasCoins.map(c => ({ objectId: c.coinObjectId, version: c.version, digest: c.digest })));
+  const [coin] = txb.splitCoins(txb.gas, [amountMIST]);
+  
+  txb.moveCall({
+    target: `${PACKAGE_ID}::shared_wallet::execute_transfer`,
+    typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
+    arguments: [txb.object(sharedWalletId), coin, txb.pure.address(recipientAddress)]
+  });
+  const txBytes = await txb.build({ client: suiClient });
 
-    // 4. Esperar la respuesta del "zapato" desde Firebase
-    console.log('⏳ App: Esperando la firma del zapato...');
-    const responseRef = database().ref(`/signing_responses/${requestId}`);
-    return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-            responseRef.off('value', listener);
-            reject(new Error("Timeout: No se recibió respuesta del zapato en 30 segundos."));
-        }, 30000);
 
-        const listener = responseRef.on('value', async (snapshot) => {
-            const response = snapshot.val();
-            if (response && response.status === 'completed') {
-                clearTimeout(timeout);
-                responseRef.off('value', listener);
-                
-                console.log(`✍️ App: ¡Firma del zapato recibida!`);
-                
-                // NOTA: La firma del simulador es falsa. En un escenario real,
-                // recibiríamos una firma válida y la combinaríamos.
-                // Aquí, para que la transacción se complete, usaremos la firma real que ya tenemos.
-                const { signature: shoeSignature } = await shoeDeviceKeypair.signTransaction(txBytes);
-                
-                // 5. Combinar las firmas
-                const multiSigSignature = multiSigPublicKey.combinePartialSignatures([appSignature, shoeSignature]);
+  // === PASO 3: Obtener la firma del Hardware (Firma del Zapato) ===
+  console.log('3. Solicitando firma del hardware...');
+  const intentMessage = new Uint8Array([3, 0, 0, ...txBytes]);
+  const digest = blake2b(intentMessage, { dkLen: 32 });
 
-                // 6. Ejecutar la transacción final
-                console.log('🚀 App: Enviando transacción final co-firmada a Sui...');
-                const executeResult = await suiClient.executeTransactionBlock({
-                    transactionBlock: txBytes,
-                    signature: multiSigSignature,
-                    options: { showEffects: true }
-                });
+  await ble.sendTxHash(digest);
+  console.log('📱 App: Petición de firma enviada al zapato. Por favor, haz el gesto...');
+  const shoeSignatureBase64 = await ble.waitForShoeSignature();
+  console.log('👟 App: ¡Firma del zapato recibida!');
+  
+  // === PASO 4: Obtener la prueba ZK y combinar las firmas ===
+  console.log('4. Obteniendo prueba ZK y combinando firmas...');
+  const proverResponse = await fetch(ZK_PROVER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jwt: authData.jwt,
+      extendedEphemeralPublicKey: ephemeralKeypair.getPublicKey().toSuiPublicKey(),
+      maxEpoch,
+      jwtRandomness: randomness,
+      salt: authData.salt,
+      keyClaimName: 'sub',
+    }),
+  });
+  if (!proverResponse.ok) throw new Error(`Error del ZK Prover: ${await proverResponse.text()}`);
+  const zkProof = await proverResponse.json();
 
-                responseRef.remove();
-                resolve(executeResult.digest);
-            }
-        });
-    });
+  const userSignature = getZkLoginSignature({ inputs: zkProof, maxEpoch, userSignature: ephemeralKeypair.sign(txBytes) });
+
+  const combinedSignature = multiSigPublicKey.combinePartialSignatures([
+      userSignature, 
+      shoeSignatureBase64 
+  ]);
+
+  // === PASO 5: Ejecutar la transacción final ===
+  console.log('🚀 App: Enviando transacción final co-firmada a Sui...');
+  const executeResult = await suiClient.executeTransactionBlock({
+      transactionBlock: txBytes,
+      signature: combinedSignature,
+      options: { showEffects: true }
+  });
+
+  return executeResult.digest;
 }

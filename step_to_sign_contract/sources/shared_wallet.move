@@ -1,87 +1,95 @@
-// Contenido definitivo y completo para: sui_contract/sources/shared_wallet.move
+// Contenido FINAL y ARQUITECTÓNICAMENTE CORRECTO del contrato
 
 module step_to_sign::shared_wallet {
     use sui::object::{ID, UID};
     use sui::transfer;
     use sui::event;
     use sui::tx_context::{Self, TxContext};
+    // ¡Nuevos imports necesarios para manejar el balance interno!
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
-    use sui::coin::{Self, Coin}; // Necesario para el nuevo patrón
+    use sui::coin::{Self, Coin};
 
     // --- Errores Personalizados ---
-    /// Se intentó una acción en una billetera que está congelada.
     const EWalletFrozen: u64 = 1;
-    /// El llamador no es el creador y no puede descongelar la billetera.
     const ENotCreator: u64 = 2;
-    /// El llamador no es el oracle autorizado para esta función.
     const ENotOracle: u64 = 3;
-    /// Se debe proporcionar al menos una moneda para el retiro de emergencia.
-    const ENoCoinsProvided: u64 = 4;
+    // ENoCoinsProvided ya no es necesario
 
-
-    // --- Estructura Principal ---
+    // --- Estructura Principal Mejorada ---
     public struct SharedWallet has key, store {
         id: UID,
         version: u64,
         is_frozen: bool,
         creator: address,
         oracle_address: address,
+        // ¡CAMBIO CLAVE! El "monedero" interno de nuestra billetera.
+        balance: Balance<SUI>,
     }
     
-    // --- Eventos ---
-    public struct WalletCreated has copy, drop {
-        wallet_id: ID,
-        owner: address,
-    }
+    // --- Eventos Mejorados ---
+    public struct WalletCreated has copy, drop { wallet_id: ID, creator: address }
+    public struct DepositMade has copy, drop { wallet_id: ID, amount: u64 }
+    public struct EmergencyWithdrawal has copy, drop { wallet_id: ID, amount: u64 }
+    public struct WalletFrozen has copy, drop { wallet_id: ID }
+    public struct WalletThawed has copy, drop { wallet_id: ID }
 
-    public struct TransactionExecuted has copy, drop {
-        wallet_id: ID,
-        new_version: u64,
-    }
-
-    public struct WalletFrozen has copy, drop {
-        wallet_id: ID,
-    }
-
-    public struct WalletThawed has copy, drop {
-        wallet_id: ID,
-    }
-
-
-    // --- Funciones ---
-    public fun create_wallet(ctx: &mut TxContext): SharedWallet {
+    // --- LÓGICA INTERNA ---
+    fun create_wallet_internal(ctx: &mut TxContext): SharedWallet {
         let creator_address = tx_context::sender(ctx);
-        let wallet = SharedWallet {
+        SharedWallet {
             id: object::new(ctx),
             version: 1,
             is_frozen: false,
             creator: creator_address,
             oracle_address: creator_address,
-        };
-        
+            // Inicializamos el monedero interno con cero SUI.
+            balance: balance::zero<SUI>(),
+        }
+    }
+
+    // --- PUNTOS DE ENTRADA PÚBLICOS ---
+
+    public entry fun create_and_share(ctx: &mut TxContext) {
+        let wallet = create_wallet_internal(ctx);
         event::emit(WalletCreated {
             wallet_id: object::id(&wallet),
-            owner: creator_address,
+            creator: tx_context::sender(ctx)
         });
-
-        wallet
+        transfer::public_share_object(wallet);
     }
 
-    public entry fun execute_transfer<T: key + store>(
-        wallet: &mut SharedWallet,
-        object_to_transfer: T,
-        recipient: address
-    ) {
+    // ¡NUEVA FUNCIÓN! Para depositar SUI en el monedero interno de la billetera.
+    public entry fun deposit(wallet: &mut SharedWallet, coin: Coin<SUI>) {
+        let amount = coin::value(&coin);
+        // Unimos el balance de la moneda depositada con el balance de la billetera.
+        balance::join(&mut wallet.balance, coin::into_balance(coin));
+        event::emit(DepositMade { wallet_id: object::id(wallet), amount });
+    }
+
+    // ¡FUNCIÓN DE RETIRO DE EMERGENCIA MEJORADA!
+    // Ya no recibe un vector de monedas, ahora es más simple y segura.
+   public entry fun emergency_withdraw(wallet: &mut SharedWallet, safe_address: address, ctx: &mut TxContext) {
+        assert!(tx_context::sender(ctx) == wallet.oracle_address, ENotOracle);
         assert!(!wallet.is_frozen, EWalletFrozen);
-
+        
+        // =======================   LA CORRECCIÓN LÓGICA   ========================
+        // 1. Obtenemos el valor total del balance actual.
+        let whole_balance_value = balance::value(&wallet.balance);
+        
+        // 2. Usamos `coin::take` para extraer de forma segura todo el valor del balance
+        //    y convertirlo en un nuevo objeto Coin. Esto modifica `wallet.balance` a 0.
+        let coin_to_withdraw = coin::take(&mut wallet.balance, whole_balance_value, ctx);
+        // =======================================================================
+        
+        // 3. Transferimos la moneda recién creada a la dirección segura.
+        transfer::public_transfer(coin_to_withdraw, safe_address);
+        
         wallet.version = wallet.version + 1;
-        event::emit(TransactionExecuted {
-            wallet_id: object::id(wallet),
-            new_version: wallet.version
-        });
-        transfer::public_transfer(object_to_transfer, recipient);
+        event::emit(EmergencyWithdrawal { wallet_id: object::id(wallet), amount: whole_balance_value });
     }
+
+    // --- Otras Funciones de Gestión ---
 
     public entry fun freeze_wallet(wallet: &mut SharedWallet) {
         wallet.is_frozen = true;
@@ -94,33 +102,13 @@ module step_to_sign::shared_wallet {
         event::emit(WalletThawed { wallet_id: object::id(wallet) });
     }
 
-    /// ¡FUNCIÓN DE EMERGENCIA PARA ORACLE!
-    /// Ejecuta una transferencia de todos los SUI de la billetera a una dirección segura.
-    /// Acepta un vector de monedas, las une y las transfiere.
-    public entry fun emergency_withdraw(
-        wallet: &mut SharedWallet,
-        // CORRECCIÓN 1: La variable 'coins' debe ser mutable para poder modificarla.
-        mut coins: vector<Coin<SUI>>, 
-        safe_address: address,
-        ctx: &mut TxContext
-    ) {
-        assert!(tx_context::sender(ctx) == wallet.oracle_address, ENotOracle);
-        assert!(!vector::is_empty(&coins), ENoCoinsProvided);
-
-        // CORRECCIÓN 2: 'main_coin' debe ser mutable para que otras monedas puedan unirse a ella.
-        let mut main_coin = vector::pop_back(&mut coins);
-        
-        // Unimos todas las demás monedas a la principal
-        while (!vector::is_empty(&coins)) {
-            coin::join(&mut main_coin, vector::pop_back(&mut coins));
-        };
-        
+    // Esta función ya no es necesaria con el nuevo diseño, pero la dejamos por si se usa en otras partes.
+    // En un futuro la podríamos eliminar.
+    public entry fun execute_transfer<T: key + store>(wallet: &mut SharedWallet, object_to_transfer: T, recipient: address) {
+        assert!(!wallet.is_frozen, EWalletFrozen);
         wallet.version = wallet.version + 1;
-
-        transfer::public_transfer(main_coin, safe_address);
-
-        // CORRECCIÓN 3: El vector 'coins' ahora está vacío, pero el contenedor 'vector' en sí
-        // debe ser destruido explícitamente porque no tiene la habilidad 'drop'.
-        vector::destroy_empty(coins);
+        // TransactionExecuted no es el evento más descriptivo aquí, pero lo mantenemos por ahora.
+        // event::emit(TransactionExecuted { wallet_id: object::id(wallet), new_version: wallet.version });
+        transfer::public_transfer(object_to_transfer, recipient);
     }
 }

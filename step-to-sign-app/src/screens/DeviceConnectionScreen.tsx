@@ -1,5 +1,3 @@
-// Contenido para: mobile-app/src/screens/DeviceConnectionScreen.tsx
-
 import React, { useState } from "react";
 import {
   Text,
@@ -9,20 +7,28 @@ import {
   SafeAreaView,
   StyleSheet,
   ActivityIndicator,
+  // Añadimos Alert para una mejor comunicación con el usuario
+  Alert,
 } from "react-native";
-import useBLE from "../hooks/useBLE"; // ¡Importamos nuestro motor de lógica BLE!
-import { Link } from 'lucide-react-native';
+import useBLE from "../hooks/useBLE"; // ¡Importamos nuestro nuevo y potente hook!
+import { Link, CheckCircle, XCircle, Bluetooth } from 'lucide-react-native';
+import { Device } from "react-native-ble-plx";
 
 const DeviceConnectionScreen = () => {
-  // Obtenemos todas las funciones y variables de estado de nuestro hook
+  // =======================   NUEVOS ESTADOS DEL HOOK   ========================
+  // Obtenemos las nuevas funciones y variables de estado de nuestro hook actualizado
   const {
     requestPermissions,
+    stopDeviceScan, // <-- La nueva función
+
     scanForDevices,
     allDevices,
     connectToDevice,
     connectedDevice,
-    lastGesture,
+    // El nuevo estado que nos dice si se está intentando una conexión
+    isConnecting,
   } = useBLE();
+  // ===========================================================================
 
   const [isScanning, setIsScanning] = useState(false);
 
@@ -31,32 +37,74 @@ const DeviceConnectionScreen = () => {
     if (permissionsGranted) {
       setIsScanning(true);
       scanForDevices();
+      // Detenemos el escaneo después de 10 segundos para ahorrar batería
+      setTimeout(() => {
+        stopDeviceScan(); // <-- Usamos la función del hook
+          setIsScanning(false);
+      }, 10000);
+    } else {
+        Alert.alert("Permisos Requeridos", "Los permisos de Bluetooth son necesarios para escanear dispositivos.");
     }
   };
+
+  // Envolvemos connectToDevice para manejar el estado de 'isConnecting'
+  const handleConnect = (device: Device) => {
+    if (isConnecting) return; // No hacer nada si ya nos estamos conectando
+    connectToDevice(device);
+  }
+
+  // --- COMPONENTES DE RENDERIZADO (para una UI más limpia) ---
+
+  const renderStatus = () => {
+    if (isConnecting) {
+        return <Text style={styles.subtitle}>Conectando...</Text>;
+    }
+    if (connectedDevice) {
+        return (
+            <View style={styles.statusContainer}>
+                <CheckCircle color="#22c55e" size={20} />
+                <Text style={styles.connectedText}>Conectado a: {connectedDevice.name}</Text>
+            </View>
+        );
+    }
+    return <Text style={styles.subtitle}>Buscando Step-to-Sign Shoe...</Text>;
+  }
+
+  const renderDeviceItem = ({ item }: { item: Device }) => (
+    <TouchableOpacity 
+        onPress={() => handleConnect(item)} 
+        style={styles.deviceItem}
+        // Deshabilitamos el item si nos estamos conectando a CUALQUIER dispositivo
+        disabled={isConnecting}
+    >
+        <Link color="#94a3b8" size={24} />
+        <Text style={styles.deviceText}>{item.name}</Text>
+        {/* Mostramos un spinner solo en el item al que nos estamos conectando */}
+        {isConnecting && connectedDevice?.id === item.id && <ActivityIndicator color="#fff" />}
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
+        <Bluetooth color="#2563eb" size={40} />
         <Text style={styles.title}>Conexión del Dispositivo</Text>
-        <Text style={styles.subtitle}>
-          {connectedDevice ? `Conectado a: ${connectedDevice.name}` : "Buscando Step-to-Sign Shoe..."}
-        </Text>
+        {renderStatus()}
       </View>
-
-      {/* Área para mostrar el último gesto recibido */}
-      <View style={styles.gestureContainer}>
-        <Text style={styles.gestureLabel}>Último Gesto Recibido:</Text>
-        <Text style={styles.gestureText}>{lastGesture || "---"}</Text>
-      </View>
-
-      {/* Botón para escanear */}
+      
+      {/* Botón para escanear (solo visible si no estamos conectados) */}
       {!connectedDevice && (
         <TouchableOpacity
           onPress={startScan}
-          style={[styles.button, isScanning && styles.buttonDisabled]}
-          disabled={isScanning}
+          // Deshabilitamos si se está escaneando O conectando
+          style={[styles.button, (isScanning || isConnecting) && styles.buttonDisabled]}
+          disabled={isScanning || isConnecting}
         >
-          {isScanning ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Escanear Dispositivos</Text>}
+          {isScanning ? (
+              <ActivityIndicator color="#fff" />
+          ) : (
+              <Text style={styles.buttonText}>Escanear Dispositivos</Text>
+          )}
         </TouchableOpacity>
       )}
 
@@ -65,50 +113,63 @@ const DeviceConnectionScreen = () => {
         style={styles.deviceList}
         data={allDevices}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity onPress={() => connectToDevice(item)} style={styles.deviceItem}>
-            <Link color="#94a3b8" size={24} />
-            <Text style={styles.deviceText}>{item.name}</Text>
-          </TouchableOpacity>
-        )}
+        renderItem={renderDeviceItem}
+        // Añadimos un texto si la lista está vacía
+        ListEmptyComponent={<Text style={styles.emptyListText}>No se han encontrado dispositivos. Asegúrate de que tu zapato esté encendido y presiona "Escanear".</Text>}
       />
     </SafeAreaView>
   );
 };
 
+
+// --- ESTILOS MEJORADOS ---
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a', paddingTop: 20 },
   header: { padding: 20, alignItems: 'center' },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#fff' },
+  title: { fontSize: 28, fontWeight: 'bold', color: '#fff', marginTop: 10 },
   subtitle: { fontSize: 16, color: '#94a3b8', marginTop: 8 },
-  gestureContainer: {
-    margin: 20,
-    padding: 20,
-    borderRadius: 10,
-    backgroundColor: '#1e293b',
+  statusContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 8,
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
-  gestureLabel: { color: '#94a3b8', fontSize: 16 },
-  gestureText: { color: '#3b82f6', fontSize: 48, fontWeight: 'bold', marginTop: 10 },
+  connectedText: {
+    fontSize: 16,
+    color: '#22c55e', // Verde para éxito
+    marginLeft: 8,
+  },
   button: {
     marginHorizontal: 20,
     backgroundColor: '#2563eb',
     padding: 15,
     borderRadius: 10,
     alignItems: 'center',
+    marginBottom: 20,
   },
   buttonDisabled: { backgroundColor: '#1e40af' },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  deviceList: { marginTop: 20 },
+  deviceList: { flex: 1 },
   deviceItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 15,
+    padding: 18,
     marginHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: '#1e293b',
   },
-  deviceText: { color: '#fff', fontSize: 18, marginLeft: 15 },
+  deviceText: { color: '#fff', fontSize: 18, marginLeft: 15, flex: 1 },
+  emptyListText: {
+      textAlign: 'center',
+      color: '#64748b',
+      marginTop: 50,
+      paddingHorizontal: 30,
+      fontSize: 16,
+      lineHeight: 24,
+  }
 });
 
 export default DeviceConnectionScreen;

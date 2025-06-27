@@ -44,6 +44,8 @@ const suinsClient = new SuinsClient({ client: suiClient, network: 'testnet' });
 const ZK_PROVER_URL = 'https://prover-dev.mystenlabs.com/v1';
 
 const PACKAGE_ID = '0x0a48074c8e307f9d80266291447cbf0a9f71ed43a5fee1ac7710ae9907bae749'; 
+const ORACLE_KEYPAIR = Ed25519Keypair.fromSecretKey('suiprivkey1qzjgp7zpu85yedau8jyndw8z5f9s2qxvw9jnl2r9e26zks4jk8qxyumvjdj');
+
 
 // --- FUNCIONES PRIVADAS DEL MÓDULO ---
 
@@ -206,4 +208,39 @@ export async function executeCoSignedTransaction({ authData, ble, recipientAddre
     });
   
     return executeResult.digest;
+}
+
+// ... después del final de la función executeCoSignedTransaction }
+
+/**
+ * Ejecuta el retiro de emergencia de TODOS los fondos de la SharedWallet.
+ * Esta es una acción privilegiada firmada por el ORÁCULO, no por el usuario.
+ * @param sharedWalletId El ID de la billetera a vaciar.
+ * @param safeAddress La dirección segura a donde se enviarán los fondos.
+ * @returns El digest de la transacción.
+ */
+export async function executeEmergencyWithdrawal(sharedWalletId: string, safeAddress: string): Promise<string> {
+    console.log(`🚨--- INICIANDO RETIRO DE EMERGENCIA PARA ${sharedWalletId} ---🚨`);
+
+    const txb = new Transaction();
+    // El sender y firmante es el ORÁCULO.
+    txb.setSender(ORACLE_KEYPAIR.getPublicKey().toSuiAddress());
+    
+    // Llamamos a la función del contrato
+    txb.moveCall({
+        target: `${PACKAGE_ID}::shared_wallet::emergency_withdraw`,
+        arguments: [
+            txb.object(sharedWalletId),
+            txb.pure.address(safeAddress)
+        ],
+    });
+
+    console.log("   - Oracle firmando y ejecutando la transacción...");
+    const result = await suiClient.signAndExecuteTransaction({
+        signer: ORACLE_KEYPAIR,
+        transaction: txb,
+    });
+
+    console.log("✅ ¡Retiro de emergencia completado!");
+    return result.digest;
 }

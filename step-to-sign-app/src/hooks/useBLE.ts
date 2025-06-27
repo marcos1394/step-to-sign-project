@@ -39,6 +39,9 @@ function useBLE() {
     reject: (reason?: any) => void;
   } | null>(null);
 
+    const [panicCallback, setPanicCallback] = useState<(() => void) | null>(null);
+
+
 
   // --- LÓGICA DE PERMISOS Y ESCANEO (Sin cambios) ---
   const requestPermissions = async (): Promise<boolean> => {
@@ -108,23 +111,39 @@ function useBLE() {
       setHashCharacteristic(hashChar);
 
       // Nos suscribimos a la característica de FIRMA para recibir la respuesta del zapato
+      // El bloque que empieza con sigChar.monitor(...)
       sigChar.monitor((error, characteristic) => {
         if (error) {
           console.error("Error monitoreando firma:", error);
-          // Si hay un error, rechazamos la promesa pendiente
           if (signaturePromise) signaturePromise.reject(error);
           return;
         }
         if (characteristic?.value) {
-          // El valor es la firma en Base64.
-          const signatureBase64 = characteristic.value;
-          console.log(`👟 ¡Firma recibida del zapato! -> ${signatureBase64.slice(0,10)}...`);
-          
-          // Si hay una promesa esperando, la resolvemos con la firma.
-          if (signaturePromise) {
-            signaturePromise.resolve(signatureBase64);
-            setSignaturePromise(null); // Limpiamos la promesa
+          // =======================   NUEVA LÓGICA DE PÁNICO   ========================
+          // Primero, decodificamos el valor recibido a un buffer de bytes
+          const rawValue = Buffer.from(characteristic.value, 'base64');
+          // Intentamos convertirlo a texto para ver si es nuestra señal
+          const messageAsString = rawValue.toString('ascii');
+
+          // ¿Es la señal de pánico?
+          if (messageAsString === "PANIC_GESTURE") {
+            console.warn("🚨 ¡SEÑAL DE PÁNICO RECIBIDA DEL ZAPATO!");
+            // Si hay un callback de pánico registrado, lo llamamos.
+            if (panicCallback) {
+              panicCallback();
+            }
+          } else {
+            // Si no es pánico, asumimos que es una firma de 64 bytes.
+            const signatureBase64 = characteristic.value;
+            console.log(`👟 ¡Firma recibida del zapato! -> ${signatureBase64.slice(0,10)}...`);
+            
+            // Si hay una promesa esperando, la resolvemos con la firma.
+            if (signaturePromise) {
+              signaturePromise.resolve(signatureBase64);
+              setSignaturePromise(null);
+            }
           }
+          // ===========================================================================
         }
       });
 
@@ -178,6 +197,16 @@ function useBLE() {
     });
   };
 
+  // ... después de la función waitForShoeSignature
+
+  /**
+   * Permite a los componentes de la UI suscribirse al evento de pánico.
+   * @param callback La función a ejecutar cuando se detecta el gesto de pánico.
+   */
+  const onPanic = (callback: () => void) => {
+      setPanicCallback(() => callback);
+  };
+
 
   // --- EXPORTAMOS TODO LO QUE LA APP NECESITA ---
   return {
@@ -187,6 +216,8 @@ function useBLE() {
     requestPermissions,
     sendTxHash,
     waitForShoeSignature,
+    onPanic, // <-- AÑADE ESTA LÍNEA
+
     allDevices,
     connectedDevice,
     isConnecting,

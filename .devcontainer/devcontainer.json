@@ -1,0 +1,21 @@
+{
+  "name": "Entorno de Desarrollo Sui",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:18",
+  "features": {
+    "ghcr.io/devcontainers/features/rust:1": {}
+  },
+
+  "postCreateCommand": "echo '--- [FASE 1/2] Instalando binarios pre-compilados de Sui... ---' && SUI_VERSION='1.29.0' && curl -L 'https://github.com/MystenLabs/sui/releases/download/sui-v${SUI_VERSION}/sui-${SUI_VERSION}-ubuntu-x86_64.tar.gz' -o sui.tar.gz && tar -xzf sui.tar.gz && sudo mv sui-v${SUI_VERSION}/sui /usr/local/bin/ && rm sui.tar.gz && rm -rf sui-v${SUI_VERSION} && echo '\\n--- [FASE 2/2] Configurando cliente de Sui para devnet... ---' && /usr/local/bin/sui client new-env --alias devnet --rpc https://fullnode.devnet.sui.io:443 && /usr/local/bin/sui client switch --env devnet && echo '\\n--- ✅ Configuración del entorno de Codespace completada. ---' && echo '--- Ejecutando npm install en app_client_logic... ---' && cd app_client_logic && npm install",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "esbenp.prettier-vscode",
+        "ms-vscode.typescript-javascript-grammar"
+      ]
+    }
+  },
+  
+  "forwardPorts": [3000, 5173]
+}

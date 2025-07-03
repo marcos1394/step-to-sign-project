@@ -75,3 +75,11 @@ android_sdk/
 # Archivos de configuración local de Android Studio
 /local.properties
 /.idea/
+
+# Carpetas de Sui en la raíz del proyecto
+sui/
+sui-*/
+sui-*.*
+sui-*
+# Ignorar binarios y carpetas de sui en la raíz
+/sui-*

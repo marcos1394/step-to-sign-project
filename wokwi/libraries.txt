@@ -1,0 +1,6 @@
+# Wokwi Library List
+# See https://docs.wokwi.com/guides/libraries
+
+micro-ecc
+Adafruit MPU6050
+Adafruit Unified Sensor

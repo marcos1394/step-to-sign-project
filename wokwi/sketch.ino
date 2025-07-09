@@ -25,10 +25,18 @@ const int fsr_pins[NUM_SENSORS] = {4, 5, 6, 7, 8}; // Talón, Arco Ext, Arco Int
 
 #define VIBRATION_MOTOR_PIN 10
 
-// UUIDs del Servicio BLE
-#define SERVICE_UUID           "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define HASH_RX_CHAR_UUID      "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-#define SIGNATURE_TX_CHAR_UUID "8c973529-548c-452f-831e-451368936990"
+// AÑADIR: Códigos para cada tipo de operación
+#define OP_CODE_GENERAL_TRANSFER    1
+#define OP_CODE_SECURE_WITHDRAWAL   2
+#define OP_CODE_EMERGENCY_RECOVERY  3
+
+// MODIFICAR: UUIDs del Servicio BLE
+#define SERVICE_UUID                  "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+// Renombramos HASH_RX por OPERATION_RX para reflejar que ahora recibe más que un hash
+#define OPERATION_RX_CHAR_UUID        "beb5483e-36e1-4688-b7f5-ea07361b26a8" 
+#define SIGNATURE_TX_CHAR_UUID        "8c973529-548c-452f-831e-451368936990"
+// AÑADIR: Una característica para que la app pueda leer la clave pública fácilmente
+#define PUBLIC_KEY_TX_CHAR_UUID       "1b7a244d-5878-45b3-a4c3-72d9a562b489"
 
 // Constantes de Detección
 const int PRESS_THRESHOLD = 2000;         // Sensibilidad de presión
@@ -53,7 +61,8 @@ bool step_is_possible = true;
 
 // Estado para el flujo de firma y pánico
 uint8_t hash_to_sign[32];
-bool hash_is_ready_to_sign = false;
+uint8_t requested_operation_code = 0; // 0 = Ninguna operación pendiente
+bool operation_is_ready = false;
 int panic_tap_counter = 0;
 unsigned long last_panic_tap_time = 0;
 
@@ -87,19 +96,23 @@ class MyServerCallbacks: public BLEServerCallbacks {
     void onDisconnect(BLEServer* pServer) { deviceConnected = false; Serial.println("❌ Dispositivo desconectado"); }
 };
 
-class HashCallback: public BLECharacteristicCallbacks {
+// MODIFICAR: Renombrar la clase y cambiar la lógica de onWrite
+class OperationCallback: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
-        String rxValue = pCharacteristic->getValue().c_str();
-        if (rxValue.length() == 32) {
-            memcpy(hash_to_sign, rxValue.c_str(), 32);
-            hash_is_ready_to_sign = true;
-            Serial.println("✍️ Hash de 32 bytes recibido. Esperando gesto del usuario...");
+        std::string rxValue = pCharacteristic->getValue();
+        // Esperamos un payload de 33 bytes (1 para el código + 32 para el hash)
+        if (rxValue.length() == 33) {
+            requested_operation_code = rxValue[0]; // El primer byte es el código
+            memcpy(hash_to_sign, rxValue.substr(1, 32).c_str(), 32); // Los 32 siguientes son el hash
+            operation_is_ready = true;
+            Serial.printf("✍️ Petición recibida (Op #%d). Esperando gesto...\n", requested_operation_code);
         } else {
-            Serial.println("Error: Se recibió un payload que no es de 32 bytes.");
+            Serial.println("Error: Payload de operación inválido. Se esperaban 33 bytes.");
+            requested_operation_code = 0;
+            operation_is_ready = false;
         }
     }
 };
-
 // --- 6. FUNCIONES AUXILIARES ---
 
 void init_imu() {
@@ -205,15 +218,49 @@ void setup() {
     pServer->setCallbacks(new MyServerCallbacks());
     BLEService *pService = pServer->createService(SERVICE_UUID);
 
-    BLECharacteristic* pHashCharacteristic = pService->createCharacteristic(HASH_RX_CHAR_UUID, BLECharacteristic::PROPERTY_WRITE);
-    pHashCharacteristic->setCallbacks(new HashCallback());
+// MODIFICAR: Característica de recepción
+    BLECharacteristic* pOperationCharacteristic = pService->createCharacteristic(
+        OPERATION_RX_CHAR_UUID, 
+        BLECharacteristic::PROPERTY_WRITE
+    );
+    pOperationCharacteristic->setCallbacks(new OperationCallback()); // Usamos el nuevo callback
 
-    pSignatureCharacteristic = pService->createCharacteristic(SIGNATURE_TX_CHAR_UUID, BLECharacteristic::PROPERTY_NOTIFY);
+     // MODIFICAR: Característica de envío de firma
+    pSignatureCharacteristic = pService->createCharacteristic(
+        SIGNATURE_TX_CHAR_UUID, 
+        BLECharacteristic::PROPERTY_NOTIFY
+    );
     pSignatureCharacteristic->addDescriptor(new BLE2902());
+
+     // AÑADIR: Característica de solo lectura para la clave pública
+    BLECharacteristic* pPublicKeyCharacteristic = pService->createCharacteristic(
+        PUBLIC_KEY_TX_CHAR_UUID,
+        BLECharacteristic::PROPERTY_READ
+    );
+    pPublicKeyCharacteristic->setValue(public_key, sizeof(public_key));
     
     pService->start();
     BLEDevice::startAdvertising();
     Serial.println("👟 Dispositivo listo y anunciándose. Esperando interacción...");
+}
+
+// Esta función centraliza la lógica de aprobación o denegación
+void handle_signature_flow(uint8_t detected_gesture_code) {
+    if (operation_is_ready) {
+        if (detected_gesture_code == requested_operation_code) {
+            Serial.println("✅ Gesto CORRECTO para la operación solicitada.");
+            trigger_vibration(150);
+            sign_hash_and_notify();
+        } else {
+            Serial.printf("❌ Gesto INCORRECTO. Se detectó el gesto #%d pero se esperaba el #%d.\n", detected_gesture_code, requested_operation_code);
+            trigger_vibration(500); // Vibración larga de error
+        }
+        // Reseteamos el estado después de un intento, sea exitoso o no.
+        operation_is_ready = false;
+        requested_operation_code = 0;
+    } else {
+        Serial.println("  (Gesto ignorado, no hay operación pendiente)");
+    }
 }
 
 // --- 7. FUNCIÓN LOOP (MOTOR DE GESTOS Y MOVIMIENTO DE PRODUCCIÓN) ---
@@ -250,45 +297,39 @@ void loop() {
         last_panic_tap_time = millis();
         Serial.printf("-> Tap de pánico detectado en la bola del pie (%d/3)\n", panic_tap_counter);
 
-        if (panic_tap_counter >= 3) {
-            Serial.println("🚨>>> Gesto de PÁNICO (TRIPLE_TAP) detectado!");
-            trigger_vibration(500); // Vibración larga y urgente
-            if (deviceConnected) {
-                pSignatureCharacteristic->setValue("PANIC_GESTURE");
-                pSignatureCharacteristic->notify();
-                Serial.println("🚀 ¡Señal de PÁNICO enviada a la App!");
-            }
-            panic_tap_counter = 0; // Reseteamos el contador
-        }
-      }
+          if (panic_tap_counter >= 3) {
+        Serial.println("🚨>>> Gesto de PÁNICO/RECUPERACIÓN (TRIPLE_TAP) detectado!");
+        panic_tap_counter = 0;
+        handle_signature_flow(OP_CODE_EMERGENCY_RECOVERY); // Llama al manejador con el código de pánico
+    }
     }
   }
 
   // --- LÓGICA DE DETECCIÓN DE GESTOS COMBINADOS ---
   // Se evalúa fuera del bucle 'for' para comprobar el estado simultáneo de los sensores.
 
-  // GESTO DE FIRMA: Requiere presión larga y SIMULTÁNEA en TALÓN (0) y DEDO GORDO (4)
-  bool heel_is_held = fsr_isPressed[0] && (millis() - fsr_pressStartTime[0] > LONG_PRESS_MIN_DURATION);
-  bool toe_is_held = fsr_isPressed[4] && (millis() - fsr_pressStartTime[4] > LONG_PRESS_MIN_DURATION);
-
-  if (heel_is_held && toe_is_held) {
-    Serial.println("✅>>> Gesto de FIRMA de alta seguridad detectado!");
-    
-    // Reseteamos los tiempos para que la firma se ejecute solo una vez por gesto
-    fsr_pressStartTime[0] = millis();
-    fsr_pressStartTime[4] = millis();
-    
-    // Un gesto de firma siempre resetea el contador de pánico para evitar activaciones accidentales
-    panic_tap_counter = 0; 
-    
-    if (hash_is_ready_to_sign) {
-      trigger_vibration(150); // Vibración corta de confirmación
-      sign_hash_and_notify();
-      hash_is_ready_to_sign = false; 
-    } else {
-      Serial.println("   (Gesto de firma ignorado, no hay hash pendiente)");
+  // GESTO 1: TRANSFERENCIA GENERAL (Presión simultánea en talón y dedo gordo)
+    bool heel_is_held = fsr_isPressed[0] && (millis() - fsr_pressStartTime[0] > LONG_PRESS_MIN_DURATION);
+    bool toe_is_held = fsr_isPressed[4] && (millis() - fsr_pressStartTime[4] > LONG_PRESS_MIN_DURATION);
+    if (heel_is_held && toe_is_held) {
+        Serial.println("✅>>> Gesto de TRANSFERENCIA GENERAL detectado!");
+        fsr_pressStartTime[0] = millis(); // Reseteamos para evitar múltiples detecciones
+        fsr_pressStartTime[4] = millis();
+        handle_signature_flow(OP_CODE_GENERAL_TRANSFER);
     }
-  }
+
+    // AÑADIR - GESTO 2: RETIRO SEGURO (Rodar el pie del talón a la bola)
+    // Se detecta si se libera el talón (0) mientras la bola del pie (3) está presionada.
+    if (!fsr_isPressed[0] && fsr_isPressed[3]) {
+        // Comprobamos si el talón FUE presionado justo antes.
+        // Esto es una simplificación; una implementación real podría ser más robusta.
+        if (fsr_pressStartTime[0] > 0 && (millis() - fsr_pressStartTime[0]) < 1000) {
+             Serial.println("✅>>> Gesto de RETIRO SEGURO (Talón -> Bola) detectado!");
+             fsr_pressStartTime[0] = 0; // Reseteamos
+             fsr_pressStartTime[3] = millis(); // Reseteamos para evitar múltiples detecciones
+             handle_signature_flow(OP_CODE_SECURE_WITHDRAWAL);
+        }
+    }
 
   delay(20); // Delay corto para una alta frecuencia de muestreo
 }

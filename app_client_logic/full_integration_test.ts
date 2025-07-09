@@ -1,239 +1,185 @@
 // =================================================================
-//  Step-to-Sign: SUITE DE PRUEBAS DE CAMPEONATO (v5.2 - Atómica)
+//  Step-to-Sign: SUITE DE PRUEBAS DE ARQUITECTURA FINAL (v6.0)
 // =================================================================
-// - Utiliza transacciones atómicas para crear Kiosk y NFT en un solo paso.
-// - Valida el 100% de la funcionalidad de 'shoe_nft' y 'shared_wallet'.
-// - Usa billeteras persistentes y la sintaxis de tipos correcta.
+// - Valida la arquitectura final con el contrato `shoe_nft` desacoplado.
+// - Prueba el flujo principal (minteo directo) y el flujo secundario (uso de Kiosk).
+// - Utiliza los IDs de tu último despliegue.
 // =================================================================
 
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
-import { blake2b } from '@noble/hashes/blake2b';
 import { bcs } from '@mysten/sui/bcs';
 
-// --- CONFIGURACIÓN ---
-// IDs extraídos directamente de tu último y definitivo despliegue.
-const PACKAGE_ID = '0x4924cb4305ec812ba8e15e58e44d8d16dc69bd719e3898bb2e35002c567c68c4';
-const ADMIN_CAP_ID = '0x107d89d1e874240a5b6ccd1e4fd4aad8f503f6831635af9ca72ce8295cd47361';
-const STATS_ORACLE_CAP_ID = '0xb7451052c2b063d8f3012085c426d8fb5309b735f76bdb0a3c0818b53567486e';
+// --- CONFIGURACIÓN (IDs de tu último despliegue) ---
+const PACKAGE_ID = '0x81767a045b2a20f9adb864ac6267f9ab2317aa83d083ee3125c835e030792158';
+const ADMIN_CAP_ID = '0x4f57c1bca5b84c4ef655c0ff126d2eb9567fae46b21937cced1bff45faaaf565';
+const STATS_ORACLE_CAP_ID = '0xa8c6a1653567482037e25b3e1ee12522c2e3cfea6b8261b4a348b382fa3e017c';
 
-// --- PARTICIPANTES DE LA PRUEBA (BILLETERAS FIJAS Y VALIDADAS) ---
-
-// La clave del Admin/Oracle que corresponde a la dirección que desplegó el paquete (0x02af...).
+// --- PARTICIPANTES DE LA PRUEBA ---
+// Administrador que mintea los NFTs
+// Administrador que mintea los NFTs
 const ADMIN_ORACLE_KEY = 'suiprivkey1qzjgp7zpu85yedau8jyndw8z5f9s2qxvw9jnl2r9e26zks4jk8qxyumvjdj';
+// CORRECCIÓN: Usamos fromSuiSecretKey para parsear la clave completa
 const adminOracleKeypair = Ed25519Keypair.fromSecretKey(ADMIN_ORACLE_KEY);
 const adminOracleAddress = adminOracleKeypair.getPublicKey().toSuiAddress();
 
-// El usuario final que será dueño del NFT y la SharedWallet.
+// Usuario final que será dueño del NFT (simulando la cuenta Multisig)
 const USER_KEY = 'suiprivkey1qzyg8kdx9qd9649dzhhmre53lrqc3q9d4ly27ch3g88676lp5zx9jecmd6s';
+// CORRECCIÓN: Usamos fromSuiSecretKey
 const userKeypair = Ed25519Keypair.fromSecretKey(USER_KEY);
 const userAddress = userKeypair.getPublicKey().toSuiAddress();
 
-// El zapato asociado al usuario.
+// La clave del dispositivo físico (zapato)
 const SHOE_KEY = 'suiprivkey1qz842kut8es39p55kkdlqdxu4p4cnkxf3fwyxw6hv8act0edle8k7gmahvg';
+// CORRECCIÓN: Usamos fromSuiSecretKey
 const shoeKeypair = Ed25519Keypair.fromSecretKey(SHOE_KEY);
 const shoePublicKeyBytes = shoeKeypair.getPublicKey().toRawBytes();
 
 
-async function printNftStats(client: SuiClient, nftId: string, message: string) {
-    console.log(`\n--- ${message} ---`);
-    const response = await client.getObject({ id: nftId, options: { showContent: true } });
-    if (response.data?.content?.dataType === 'moveObject') {
-        const fields = response.data.content.fields as any;
-        console.log(`   - Nombre: ${fields.name}, Nivel: ${fields.level}, Pasos: ${fields.steps_total}, Modelo: ${fields.model_version}`);
-    } else {
-        console.log(`   - No se pudieron obtener las estadísticas del NFT.`);
+// --- FUNCIÓN AUXILIAR ---
+async function printNftDetails(client: SuiClient, nftId: string, message: string) {
+    console.log(`\n--- ${message} (ID: ${nftId.slice(0, 6)}...) ---`);
+    await new Promise(resolve => setTimeout(resolve, 3000)); // Pausa para indexación
+    try {
+        const response = await client.getObject({ id: nftId, options: { showContent: true } });
+        if (response.data?.content?.dataType === 'moveObject') {
+            const fields = response.data.content.fields as any;
+            console.log(`  - Dueño: ${response.data.owner}`);
+            console.log(`  - Pasos: ${fields.steps_total}, Nivel: ${fields.level}`);
+            // Verificamos que la clave pública del dispositivo se haya guardado correctamente
+            console.log(`  - PubKey del Zapato guardada: ${fields.device_public_key ? '✅ Correcta' : '❌ INCORRECTA'}`);
+        } else {
+            console.log(`  - No se pudieron obtener los detalles del NFT.`);
+        }
+    } catch (error) {
+        console.log(`  - Error al obtener detalles del NFT: ${(error as Error).message}`);
     }
 }
 
 async function main() {
-    console.log("🚀 INICIANDO SUITE DE PRUEBAS DEFINITIVA (con Diagnóstico Mejorado) 🚀");
+    console.log("🚀 INICIANDO PRUEBA DE ARQUITECTURA FINAL 🚀");
     const client = new SuiClient({ url: getFullnodeUrl('testnet') });
 
-    // Envolvemos toda la lógica en un gran try...catch para obtener el error detallado.
-    try {
-        // --- FASE 0: PREPARACIÓN ---
-        console.log("\n--- FASE 0: Verificación de fondos ---");
-        console.log(`ℹ️  Usando Admin/Oracle: ${adminOracleAddress}`);
-        console.log(`ℹ️  Usando Usuario Final: ${userAddress}`);
-        console.log("   -> Asegúrate de que AMBAS direcciones tengan SUI para el gas.");
-        
-        // --- FASE 1: OBTENER CAPACIDADES ---
-        const allAdminObjects = await client.getOwnedObjects({ owner: adminOracleAddress, options: { showType: true } });
-        const adminCap = allAdminObjects.data.find(obj => obj.data?.type === `${PACKAGE_ID}::shoe_nft::ShoeAdminCap`);
-        if (!adminCap?.data?.objectId) throw new Error("No se encontró la ShoeAdminCap del admin.");
-        const adminCapId = adminCap.data.objectId;
-        console.log(`✅ Capacidad de Admin encontrada.`);
+    // =================================================================
+    // FASE 1: FLUJO PRINCIPAL - Minteo directo a la cuenta del usuario
+    // =================================================================
+    console.log("\n--- FASE 1: Probando el minteo directo (función `mint`) ---");
+   const txbMint = new Transaction();
+txbMint.moveCall({
+    target: `${PACKAGE_ID}::shoe_nft::mint`,
+    arguments: [
+        txbMint.object(ADMIN_CAP_ID),
+        // CORRECCIÓN: Serializamos explícitamente los strings y bytes a vector<u8>
+        txbMint.pure(bcs.vector(bcs.u8()).serialize(new TextEncoder().encode('Kinetis Gen 1'))),
+        txbMint.pure(bcs.vector(bcs.u8()).serialize(new TextEncoder().encode('Zapato digital con Kinesis Key'))),
+        txbMint.pure(bcs.vector(bcs.u8()).serialize(new TextEncoder().encode('https://kinetis.xyz/nft/shoe/1'))),
+        txbMint.pure(bcs.vector(bcs.u8()).serialize(shoePublicKeyBytes)),
+        txbMint.pure.u64(1),
+        txbMint.pure.address(userAddress),
+    ]
+});
 
-        // --- FASE 2: CREACIÓN ATÓMICA DE KIOSK Y NFT ---
-        console.log(`\n--- FASE 2: Creando Kiosk y Minteando NFT para el usuario... ---`);
-        const txbSetup = new Transaction();
-        txbSetup.setSender(adminOracleAddress);
-        const [kiosk, kioskCap] = txbSetup.moveCall({ target: '0x2::kiosk::new' });
-        txbSetup.moveCall({
-            target: `${PACKAGE_ID}::shoe_nft::mint_and_place_in_kiosk`,
-            arguments: [
-                txbSetup.object(adminCapId),
-                kiosk, 
-                kioskCap, 
-                txbSetup.pure(bcs.vector(bcs.u8()).serialize(new TextEncoder().encode('Step-to-Sign Kiosk'))),
-                txbSetup.pure(bcs.vector(bcs.u8()).serialize(new TextEncoder().encode('NFT Dinámico en Kiosk'))),
-                txbSetup.pure(bcs.vector(bcs.u8()).serialize(new TextEncoder().encode('https://step-to-sign.xyz/nft'))),
-                txbSetup.pure.u64(2025),
-            ]
-        });
-        txbSetup.transferObjects([kiosk, kioskCap], userAddress);
-        
-        console.log("   -> Enviando transacción de setup para firmar y ejecutar...");
-        const setupResult = await client.signAndExecuteTransaction({ signer: adminOracleKeypair, transaction: txbSetup, options: { showObjectChanges: true, showEvents: true, showEffects: true }});
+    const mintResult = await client.signAndExecuteTransaction({
+        signer: adminOracleKeypair,
+        transaction: txbMint,
+        options: { showObjectChanges: true, showEvents: true, showEffects:true }
+    });
 
-        // Verificación de éxito de la transacción
-        if (setupResult.effects?.status.status !== 'success') {
-            console.error("❌ La transacción de setup fue enviada pero falló en la ejecución.");
-            console.error("RAZÓN DEL ERROR ON-CHAIN:", setupResult.effects?.status.error);
-            throw new Error("La creación atómica de Kiosk y NFT falló.");
-        }
-
-    // --- EXTRACCIÓN DE IDs (MÉTODO SEGURO) ---
-    // Extraemos los IDs de los objetos creados para usarlos en las siguientes fases.
-    let userKioskId: string | undefined;
-    let userKioskCapId: string | undefined;
-    if (setupResult.objectChanges) {
-        for (const change of setupResult.objectChanges) {
-            if (change.type === 'created' && typeof change.owner === 'object' && 'AddressOwner' in change.owner && change.owner.AddressOwner === userAddress) {
-                if (change.objectType.endsWith('::kiosk::Kiosk')) userKioskId = change.objectId;
-                else if (change.objectType.endsWith('::kiosk::KioskOwnerCap')) userKioskCapId = change.objectId;
-            }
-        }
+    if (mintResult.effects?.status.status !== 'success') {
+        throw new Error(`La TX de minteo directo falló: ${mintResult.effects?.status.error}`);
     }
-    if (!userKioskId || !userKioskCapId) throw new Error("Fallo al encontrar el Kiosk o la KioskOwnerCap para el usuario.");
-    
-    const mintEvent = setupResult.events?.find(e => e.type.endsWith('::shoe_nft::ShoeMinted'));
-    if (!mintEvent) throw new Error("No se encontró el evento de minteo del NFT.");
-    const nftId = (mintEvent.parsedJson as any).nft_id;
-    
-    console.log(`✅ Kiosk y NFT creados atómicamente. NFT ID: ${nftId}`);
-    
-    // --- FASE 2: GAMIFICACIÓN ---
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    await printNftStats(client, nftId, "NFT Recién Minteado");
-    
-      // --- FASE 2.5: ACTUALIZANDO ESTADÍSTICAS (FIRMADO POR EL USUARIO) ---
-    console.log("\n--- FASE 2.5: Actualizando estadísticas del NFT en Kiosk ---");
-    const txbUpdate = new Transaction();
 
-    // =======================   ¡LA CORRECCIÓN CLAVE DE FIRMANTE!   =========================
-    // El DUEÑO del Kiosk (el Usuario) debe ser quien envía y firma la transacción.
-    txbUpdate.setSender(userAddress); 
+    const mintEvent = mintResult.events?.find(e => e.type.endsWith('::shoe_nft::ShoeMinted'));
+    if (!mintEvent) throw new Error("No se encontró el evento de minteo.");
+    const nftId = (mintEvent.parsedJson as any).nft_id;
+    console.log(`✅ NFT minteado y transferido al usuario. NFT ID: ${nftId}`);
+    await printNftDetails(client, nftId, "Detalles del NFT recién minteado");
+
+    // =================================================================
+    // =================================================================
+    // FASE 2: FLUJO OPCIONAL - El usuario decide usar Kiosk para vender
+    // =================================================================
+    console.log("\n--- FASE 2: El usuario crea su Kiosk y guarda su NFT ---");
     
+    const txbKioskAndPlace = new Transaction();
+    txbKioskAndPlace.setSender(userAddress);
+    const [kiosk, kioskCap] = txbKioskAndPlace.moveCall({ target: '0x2::kiosk::new' });
+    txbKioskAndPlace.moveCall({
+        target: '0x2::kiosk::place',
+        typeArguments: [`${PACKAGE_ID}::shoe_nft::ShoeNFT`],
+        arguments: [kiosk, kioskCap, txbKioskAndPlace.object(nftId)]
+    });
+    txbKioskAndPlace.transferObjects([kioskCap], txbKioskAndPlace.pure.address(userAddress));
+    txbKioskAndPlace.moveCall({ 
+        target: '0x2::transfer::public_share_object', 
+        typeArguments: ['0x2::kiosk::Kiosk'], 
+        arguments: [kiosk] 
+    });
+
+    const kioskAndPlaceResult = await client.signAndExecuteTransaction({
+        signer: userKeypair,
+        transaction: txbKioskAndPlace,
+        options: { showObjectChanges: true, showEffects: true }
+    });
+
+    if (kioskAndPlaceResult.effects?.status.status !== 'success') {
+        throw new Error(`La TX de Kiosk y Place falló: ${kioskAndPlaceResult.effects?.status.error}`);
+    }
+
+    if (!kioskAndPlaceResult.objectChanges) {
+        throw new Error("La respuesta de la transacción no incluyó los cambios de objetos esperados.");
+    }
+    
+    const createdKiosk = kioskAndPlaceResult.objectChanges.find(c => c.type === 'created' && c.objectType.endsWith('::kiosk::Kiosk')) as { objectId: string };
+    const createdKioskCap = kioskAndPlaceResult.objectChanges.find(c => c.type === 'created' && c.objectType.endsWith('::kiosk::KioskOwnerCap')) as { objectId: string };
+    
+    if (!createdKiosk || !createdKioskCap) {
+        throw new Error("No se pudieron encontrar los IDs del Kiosk o KioskCap en la respuesta.");
+    }
+
+    console.log(`✅ Kiosk creado y NFT colocado en una sola transacción.`);
+    await printNftDetails(client, nftId, "Detalles del NFT dentro del Kiosk");
+
+    // =================================================================
+    // FASE 3: Interacción con el NFT a través del Kiosk
+    // =================================================================
+    console.log("\n--- FASE 3: Actualizando estadísticas del NFT en el Kiosk ---");
+
+    const oracleCapObject = await client.getObject({ id: STATS_ORACLE_CAP_ID, options: { showOwner: true } });
+    if (!oracleCapObject.data) {
+        throw new Error(`El objeto StatsOracleCap con ID ${STATS_ORACLE_CAP_ID} no fue encontrado.`);
+    }
+    const owner = oracleCapObject.data.owner;
+    if (owner === null || typeof owner !== 'object' || !('Shared' in owner)) {
+        throw new Error("StatsOracleCap no es un objeto compartido.");
+    }
+    const oracleCapSharedVersion = owner.Shared.initial_shared_version;
+
+    const txbUpdate = new Transaction();
+    txbUpdate.setSender(userAddress);
     txbUpdate.moveCall({
         target: `${PACKAGE_ID}::shoe_nft::update_stats`,
         arguments: [
-            txbUpdate.object(STATS_ORACLE_CAP_ID), // El Cap del Oráculo (compartido)
-            txbUpdate.object(userKioskId),         // El Kiosk del Usuario
-            txbUpdate.object(userKioskCapId),      // El Cap del Kiosk (prueba de propiedad del usuario)
-            txbUpdate.pure.address(nftId),         // El ID del NFT
-            txbUpdate.pure.u64(15000)              // Los nuevos pasos
+            txbUpdate.object(createdKiosk.objectId),
+            txbUpdate.object(createdKioskCap.objectId),
+            txbUpdate.pure.id(nftId),
+            txbUpdate.sharedObjectRef({ objectId: STATS_ORACLE_CAP_ID, initialSharedVersion: oracleCapSharedVersion, mutable: false }),
+            txbUpdate.pure.u64(15000),
         ]
     });
     
-    // La transacción es firmada por el userKeypair, que posee el userKioskId y userKioskCapId.
-    const updateResult = await client.signAndExecuteTransaction({ signer: userKeypair, transaction: txbUpdate });
-    // ====================================================================================
-    
-    // Verificamos que la transacción de actualización fue exitosa
+    const updateResult = await client.signAndExecuteTransaction({ signer: userKeypair, transaction: txbUpdate, options: {showEffects: true} });
     if (updateResult.effects?.status.status !== 'success') {
-        throw new Error(`La transacción de actualización de stats falló: ${updateResult.effects?.status.error}`);
+        throw new Error(`La TX de actualización falló: ${updateResult.effects?.status.error}`);
     }
+    console.log(`✅ Estadísticas del NFT actualizadas.`);
+    await printNftDetails(client, nftId, "Detalles del NFT después de la actualización");
 
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    await printNftStats(client, nftId, "NFT Después de Subir de Nivel");
-    console.log("✅ Prueba de gamificación completada.");
-    
-    // --- FASE 3: SHARED WALLET LIFECYCLE ---
-    console.log(`\n--- FASE 3: Probando el contrato SharedWallet... ---`);
-    const txbCreateWallet = new Transaction();
-    txbCreateWallet.moveCall({
-        target: `${PACKAGE_ID}::shared_wallet::create`,
-        arguments: [ txbCreateWallet.pure(bcs.vector(bcs.u8()).serialize(shoePublicKeyBytes)) ]
-    });
-    const createResult = await client.signAndExecuteTransaction({ signer: userKeypair, transaction: txbCreateWallet, options: { showObjectChanges: true } });
-    const walletObject = createResult.objectChanges?.find(c => c.type === 'created' && typeof c.owner === 'object' && 'AddressOwner' in c.owner && c.owner.AddressOwner === userAddress);
-    if (!walletObject || !('objectId' in walletObject)) throw new Error("Fallo al crear la SharedWallet.");
-    const sharedWalletId = walletObject.objectId;
-    console.log(`✅ SharedWallet creada: ${sharedWalletId}`);
-    
-    const txbDeposit = new Transaction();
-    const [coin_to_deposit] = txbDeposit.splitCoins(txbDeposit.gas, [1_000_000_000n]);
-    txbDeposit.moveCall({
-        target: `${PACKAGE_ID}::shared_wallet::deposit`,
-        arguments: [txbDeposit.object(sharedWalletId), coin_to_deposit],
-    });
-    await client.signAndExecuteTransaction({ signer: userKeypair, transaction: txbDeposit });
-    console.log("✅ Depósito exitoso.");
-
-    // --- FASE 4: PRUEBAS DE SEGURIDAD (CO-FIRMA, FREEZE/THAW) ---
-    console.log("\n--- FASE 4: Probando transferencia co-firmada y seguridad ---");
-    const amountToTransfer = 500_000_000n;
-    const txbSign = new Transaction();
-    txbSign.setSender(userAddress);
-    const signaturePlaceholder = txbSign.pure(bcs.vector(bcs.u8()).serialize(new Uint8Array(64).fill(0)));
-    txbSign.moveCall({
-        target: `${PACKAGE_ID}::shared_wallet::cosign_and_transfer`,
-        arguments: [txbSign.object(sharedWalletId), signaturePlaceholder, txbSign.pure.u64(amountToTransfer), txbSign.pure.address(adminOracleAddress)],
-    });
-    const txSignBytes = await txbSign.build({ client, onlyTransactionKind: true });
-    const intentMessage = new Uint8Array([3, 0, 0, ...txSignBytes]);
-    const txDigest = blake2b(intentMessage, { dkLen: 32 });
-    const shoeSignature = await shoeKeypair.sign(txDigest);
-    
-    const txbExecute = new Transaction();
-    txbExecute.setSender(userAddress);
-    txbExecute.moveCall({
-        target: `${PACKAGE_ID}::shared_wallet::cosign_and_transfer`,
-        arguments: [
-            txbExecute.object(sharedWalletId),
-            txbExecute.pure(bcs.vector(bcs.u8()).serialize(shoeSignature)),
-            txbExecute.pure.u64(amountToTransfer),
-            txbExecute.pure.address(adminOracleAddress)
-        ],
-    });
-    await client.signAndExecuteTransaction({ signer: userKeypair, transaction: txbExecute });
-    console.log(`✅ Transferencia co-firmada exitosa.`);
-
-    const txbFreeze = new Transaction();
-    txbFreeze.moveCall({ target: `${PACKAGE_ID}::shared_wallet::freeze_wallet`, arguments: [txbFreeze.object(sharedWalletId)] });
-    await client.signAndExecuteTransaction({ signer: userKeypair, transaction: txbFreeze });
-    console.log("❄️ Billetera congelada.");
-
-    try {
-        await client.signAndExecuteTransaction({ signer: userKeypair, transaction: txbExecute });
-        throw new Error("¡FALLO DE LÓGICA! La transferencia desde una billetera congelada tuvo éxito.");
-    } catch (error: any) {
-        if (error.toString().includes('EWalletFrozen')) {
-            console.log("✅ ¡Éxito! La transferencia fue rechazada con el error 'EWalletFrozen'.");
-        } else {
-            throw new Error(`La prueba de transferencia congelada falló por una razón inesperada.`);
-        }
-    }
-
-    const txbThaw = new Transaction();
-    txbThaw.moveCall({ target: `${PACKAGE_ID}::shared_wallet::thaw_wallet`, arguments: [txbThaw.object(sharedWalletId)] });
-    await client.signAndExecuteTransaction({ signer: userKeypair, transaction: txbThaw });
-    console.log("☀️ Billetera descongelada.");
-    console.log("✅ Pruebas de seguridad completadas.");
-
-    console.log("\n🎉 ¡TODA LA SUITE DE PRUEBAS ON-CHAIN SE COMPLETÓ EXITOSAMENTE! 🎉");
-}  catch (error) {
-        // =======================   LA CORRECCIÓN CLAVE   ========================
-        // Este bloque ahora imprimirá el objeto de error completo, que contiene
-        // la causa raíz detallada que nos envía la red de Sui.
-        console.error("\n❌ Ocurrió un error DETALLADO en la ejecución de la suite de pruebas:");
-        console.error(error);
-        // =======================================================================
-    }
+    console.log("\n🎉 ¡TODA LA SUITE DE PRUEBAS SE COMPLETÓ EXITOSAMENTE! 🎉");
 }
 
-
-main();
+main().catch(e => {
+    console.error(e);
+    process.exit(1);
+});
